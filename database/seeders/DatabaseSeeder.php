@@ -33,8 +33,8 @@ class DatabaseSeeder extends Seeder
     {
         $accounts = [
             ['admin', 'System Administrator', 'admin@test.com'],
-            ['complianceOfficer', 'Compliance Officer', 'officer@nacsa-toolkit.test'],
-            ['executiveReviewer', 'Executive Reviewer', 'executive@nacsa-toolkit.test'],
+            ['complianceOfficer', 'Compliance Officer', 'officer@test.com'],
+            ['executiveReviewer', 'Executive Reviewer', 'executive@test.com'],
         ];
 
         foreach ($accounts as [$state, $name, $email]) {

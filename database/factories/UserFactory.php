@@ -16,7 +16,7 @@ class UserFactory extends Factory
     /**
      * Default factory password — satisfies the FR-01 complexity rules.
      */
-    public const Password = 'Correct-Horse-9';
+    public const Password = 'password';
 
     /**
      * The current password being used by the factory.
@@ -47,34 +47,34 @@ class UserFactory extends Factory
      */
     public function unverified(): static
     {
-        return $this->state(fn (array $attributes) => [
+        return $this->state(fn(array $attributes) => [
             'email_verified_at' => null,
         ]);
     }
 
     public function admin(): static
     {
-        return $this->state(fn (array $attributes) => ['role' => Role::Admin]);
+        return $this->state(fn(array $attributes) => ['role' => Role::Admin]);
     }
 
     public function complianceOfficer(): static
     {
-        return $this->state(fn (array $attributes) => ['role' => Role::ComplianceOfficer]);
+        return $this->state(fn(array $attributes) => ['role' => Role::ComplianceOfficer]);
     }
 
     public function executiveReviewer(): static
     {
-        return $this->state(fn (array $attributes) => ['role' => Role::ExecutiveReviewer]);
+        return $this->state(fn(array $attributes) => ['role' => Role::ExecutiveReviewer]);
     }
 
     public function inactive(): static
     {
-        return $this->state(fn (array $attributes) => ['is_active' => false]);
+        return $this->state(fn(array $attributes) => ['is_active' => false]);
     }
 
     public function passwordExpired(): static
     {
-        return $this->state(fn (array $attributes) => [
+        return $this->state(fn(array $attributes) => [
             'password_changed_at' => now()->subDays(config('security.password_expiry_days') + 1),
         ]);
     }
