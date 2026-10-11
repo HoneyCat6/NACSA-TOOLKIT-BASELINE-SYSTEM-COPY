@@ -84,7 +84,7 @@ class AssessmentController extends Controller
     {
         Gate::authorize('view', $assessment);
 
-        $assessment->load(['creator', 'elements.ncsbElement', 'trend.previousAssessment', 'trend.alerts']);
+        $assessment->load(['creator', 'elements.ncsbElement', 'trend.previousAssessment', 'trend.alerts.ncsbElement']);
 
         $elements = $assessment->elements
             ->sortBy(fn (AssessmentElement $element): int => $element->ncsbElement->sort_order)

@@ -36,14 +36,16 @@ class DashboardTest extends TestCase
             ->assertSeeText('2 active degradation alerts need acknowledgement.');
     }
 
-    public function test_executive_dashboard_shows_the_latest_cycle(): void
+    public function test_executive_dashboard_shows_the_latest_cycle_without_a_results_link(): void
     {
-        Assessment::factory()->create(['cycle_label' => 'Cycle 2026 H1']);
+        $assessment = Assessment::factory()->create(['cycle_label' => 'Cycle 2026 H1']);
 
         $this->signIn(User::factory()->executiveReviewer()->create())
             ->get('/dashboard')
             ->assertOk()
             ->assertSeeText('Cycle 2026 H1')
-            ->assertSeeText('View results');
+            ->assertSee(route('trends.index'))
+            ->assertDontSee(route('assessments.show', $assessment))
+            ->assertDontSee(route('assessments.index'));
     }
 }

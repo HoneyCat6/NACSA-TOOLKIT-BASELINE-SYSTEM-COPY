@@ -35,7 +35,8 @@ class DeleteAssessmentTest extends TestCase
 
         $this->assertSame(3, Assessment::query()->count());
         $this->assertDatabaseCount('assessment_trends', 2);
-        $this->assertDatabaseCount('degradation_alerts', 1);
+        // Cycle 2025 H2's IDENTIFY domain alert and its two IDENTIFY element alerts remain.
+        $this->assertDatabaseCount('degradation_alerts', 3);
 
         $this->assertDatabaseHas('audit_logs', [
             'action' => 'assessment.deleted',

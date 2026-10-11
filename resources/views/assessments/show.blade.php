@@ -99,10 +99,18 @@
     @endif
 
     @if ($trend?->alerts->isNotEmpty())
+        @php($domainAlerts = $trend->alerts->reject->isForElement())
+        @php($elementAlerts = $trend->alerts->filter->isForElement())
         <div class="alert alert-danger" role="alert">
-            <strong>Degradation detected.</strong>
-            {{ $trend->alerts->map(fn ($alert) => $alert->domain->value)->join(', ', ' and ') }}
-            declined compared with {{ $trend->previousAssessment->cycle_label }}.
+            <strong>Degradation detected</strong> compared with {{ $trend->previousAssessment->cycle_label }}.
+            @if ($domainAlerts->isNotEmpty())
+                {{ $domainAlerts->map(fn ($alert) => $alert->domain->value)->join(', ', ' and ') }}
+                {{ $domainAlerts->count() === 1 ? 'domain score' : 'domain scores' }} declined.
+            @endif
+            @if ($elementAlerts->isNotEmpty())
+                {{ $elementAlerts->count() }} {{ Str::plural('element', $elementAlerts->count()) }} dropped a maturity level:
+                {{ $elementAlerts->map(fn ($alert) => $alert->ncsbElement->code)->join(', ') }}.
+            @endif
             <a href="{{ route('trends.index') }}" class="alert-link">Review on the trend dashboard</a>
         </div>
     @endif
@@ -167,6 +175,7 @@
                         <th scope="col">Domain</th>
                         <th scope="col" class="text-center">Yes</th>
                         <th scope="col">Level</th>
+                        <th scope="col">Change vs previous</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -183,6 +192,13 @@
                                         ? 'Unanswered'
                                         : $element->maturity_level->value.' · '.$element->maturity_level->label(),
                                 ])
+                            </td>
+                            <td class="text-nowrap small">
+                                @if ($element->level_delta === null)
+                                    <span class="text-muted">—</span>
+                                @else
+                                    @include('assessments.partials.delta', ['delta' => $element->level_delta])
+                                @endif
                             </td>
                         </tr>
                     @endforeach

@@ -87,12 +87,45 @@ class UploadAssessmentTest extends TestCase
         $current = Assessment::query()->where('cycle_label', 'Cycle 2026 H1')->sole();
         $this->assertSame('-2.00', $current->trend->respond_delta);
         $this->assertSame('0.00', $current->trend->protect_delta);
-        $this->assertSame(['RESPOND'], $current->trend->alerts->pluck('domain.value')->all());
+        $this->assertSame(['Respond', 'RS-01'], $current->trend->alerts->load('ncsbElement')->map->subjectLabel()->all());
+        $this->assertSame(-2, $current->elements()->where('element_code', 'RS-01')->sole()->level_delta);
+        $this->assertSame(0, $current->elements()->where('element_code', 'GV-01')->sole()->level_delta);
 
         Mail::assertSent(DegradationAlertMail::class, 2);
         Mail::assertSent(DegradationAlertMail::class, fn (DegradationAlertMail $mail) => $mail->hasTo($officer->email));
         Mail::assertSent(DegradationAlertMail::class, fn (DegradationAlertMail $mail) => $mail->hasTo($otherOfficer->email));
         Mail::assertNotSent(DegradationAlertMail::class, fn (DegradationAlertMail $mail) => $mail->hasTo($inactiveOfficer->email) || $mail->hasTo($executive->email));
+    }
+
+    /**
+     * DECISIONS D-36: an element decline offset by another element's rise leaves the domain average flat,
+     * but must still be flagged (proposal Table 3.2 "Degradation Detection").
+     */
+    public function test_element_decline_hidden_by_an_unchanged_domain_average_still_raises_an_alert(): void
+    {
+        Storage::fake('local');
+        Mail::fake();
+        $officer = User::factory()->complianceOfficer()->create();
+
+        $this->signIn($officer)->post('/assessments', $this->payload(ToolkitWorkbook::allYes()->withYesCount('PR-01', 0)->toUploadedFile(), 'Cycle 2025 H2', '2025-12-01'));
+        $this->signIn($officer)->post('/assessments', $this->payload(ToolkitWorkbook::allYes()->withYesCount('PR-02', 0)->toUploadedFile(), 'Cycle 2026 H1', '2026-06-01'));
+
+        $current = Assessment::query()->where('cycle_label', 'Cycle 2026 H1')->sole();
+        $this->assertSame('0.00', $current->trend->protect_delta);
+        $this->assertSame(3, $current->elements()->where('element_code', 'PR-01')->sole()->level_delta);
+        $this->assertSame(-3, $current->elements()->where('element_code', 'PR-02')->sole()->level_delta);
+
+        $alert = $current->trend->alerts()->sole();
+        $this->assertSame('PR-02', $alert->subjectLabel());
+        $this->assertSame('3.00', $alert->score_drop);
+
+        Mail::assertSent(DegradationAlertMail::class, fn (DegradationAlertMail $mail): bool => $mail->hasTo($officer->email)
+            && str_contains($mail->render(), 'PR-02')
+            && str_contains($mail->render(), 'maturity level fell by 3'));
+
+        $this->signIn($officer)->get(route('assessments.show', $current))
+            ->assertOk()
+            ->assertSeeText('1 element dropped a maturity level: PR-02.');
     }
 
     public function test_second_cycle_without_a_decline_sends_no_alert(): void

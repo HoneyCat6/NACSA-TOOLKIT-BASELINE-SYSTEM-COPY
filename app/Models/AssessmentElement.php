@@ -23,6 +23,7 @@ class AssessmentElement extends Model
         return [
             'responses' => 'encrypted:array',
             'maturity_level' => MaturityLevel::class,
+            'level_delta' => 'integer',
             'domain' => Domain::class,
             'status' => ElementStatus::class,
         ];

@@ -15,7 +15,7 @@ class DegradationAlertMail extends Mailable
 
     public function __construct(public AssessmentTrend $trend)
     {
-        $this->trend->loadMissing(['assessment', 'previousAssessment', 'alerts']);
+        $this->trend->loadMissing(['assessment', 'previousAssessment', 'alerts.ncsbElement']);
     }
 
     public function envelope(): Envelope

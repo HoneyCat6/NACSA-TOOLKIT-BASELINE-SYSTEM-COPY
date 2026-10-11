@@ -17,7 +17,7 @@
         </div>
     @else
         <div class="row g-3 mb-4">
-            <div class="col-md-4">
+            <div class="col-md-6 col-xl-3">
                 <div class="card shadow-sm h-100">
                     <div class="card-body">
                         <div class="small text-muted mb-1">Overall maturity · {{ $latest->cycle_label }}</div>
@@ -31,7 +31,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-6 col-xl-3">
                 <div class="card shadow-sm h-100">
                     <div class="card-body">
                         <div class="small text-muted mb-1">Improving domains</div>
@@ -40,7 +40,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-6 col-xl-3">
                 <div class="card shadow-sm h-100 @if ($decliningCount > 0) border-danger @endif">
                     <div class="card-body">
                         <div class="small text-muted mb-1">Domains at risk</div>
@@ -49,6 +49,18 @@
                             @if ($decliningCount > 0)<span class="fs-6">▼ declined</span>@endif
                         </div>
                         <div class="small text-muted">{{ $latestTrend ? 'Domain score fell in the latest cycle' : 'Needs a second cycle' }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 col-xl-3">
+                <div class="card shadow-sm h-100 @if ($decliningElementCount > 0) border-danger @endif">
+                    <div class="card-body">
+                        <div class="small text-muted mb-1">Elements declined</div>
+                        <div class="fs-4 fw-semibold @if ($decliningElementCount > 0) text-danger @endif">
+                            {{ $latestTrend ? $decliningElementCount : '—' }}
+                            @if ($decliningElementCount > 0)<span class="fs-6">▼ of 33</span>@endif
+                        </div>
+                        <div class="small text-muted">{{ $latestTrend ? 'Element maturity level fell in the latest cycle' : 'Needs a second cycle' }}</div>
                     </div>
                 </div>
             </div>
@@ -110,19 +122,74 @@
                 </table>
             </div>
         </details>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white">
+                <h2 class="h5 mb-0">Element maturity across cycles</h2>
+                <div class="small text-muted">Level 0–3 of each of the 33 NCSB v1.4 elements in every cycle. Elements whose level fell in the latest cycle are marked ▼.</div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col">Code</th>
+                            <th scope="col">Element</th>
+                            @foreach ($chart['labels'] as $label)
+                                <th scope="col" class="text-center text-nowrap">{{ $label }}</th>
+                            @endforeach
+                            <th scope="col" class="text-nowrap">Latest change</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach ($elementHistory as $element)
+                            <tr @class(['table-danger' => ($element['latest_delta'] ?? 0) < 0])>
+                                <td class="fw-semibold text-nowrap">{{ $element['code'] }}</td>
+                                <td class="small">{{ $element['name'] }}</td>
+                                @foreach ($element['levels'] as $level)
+                                    <td class="text-center">
+                                        @if ($level === null)
+                                            <span class="text-muted small">—</span>
+                                        @else
+                                            @php($maturity = App\Enums\MaturityLevel::from($level))
+                                            @include('partials.severity-badge', ['severity' => $maturity->severity(), 'label' => $level])
+                                        @endif
+                                    </td>
+                                @endforeach
+                                <td class="text-nowrap small">
+                                    @if ($element['latest_delta'] === null)
+                                        <span class="text-muted">—</span>
+                                    @else
+                                        @include('assessments.partials.delta', ['delta' => $element['latest_delta']])
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
     @endif
 
     <div class="row g-4">
         <div class="col-lg-7">
-            <h2 class="h5">Active degradation alerts</h2>
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                <h2 class="h5 mb-0">Active degradation alerts</h2>
+                @if ($activeAlerts->count() > 1)
+                    @can('acknowledgeAll', App\Models\DegradationAlert::class)
+                        <form method="POST" action="{{ route('alerts.acknowledge-all') }}"
+                              @submit="if (! confirm({{ Js::from('Acknowledge all '.$activeAlerts->count().' active alerts?') }})) $event.preventDefault()"
+                              x-data>
+                            @csrf
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Acknowledge all ({{ $activeAlerts->count() }})</button>
+                        </form>
+                    @endcan
+                @endif
+            </div>
             @forelse ($activeAlerts as $alert)
                 <div class="card shadow-sm border-danger mb-2">
                     <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
                         <div>
-                            <span class="badge text-bg-danger me-1">▼ Declined</span>
-                            <strong>{{ $alert->domain->value }}</strong>
-                            fell by {{ $alert->score_drop }} in
-                            <a href="{{ route('assessments.show', $alert->trend->assessment) }}">{{ $alert->trend->assessment->cycle_label }}</a>
+                            @include('trends.partials.alert-summary', ['alert' => $alert])
                             <div class="small text-muted">Raised {{ $alert->triggered_at->format('j M Y, H:i') }}</div>
                         </div>
                         @can('acknowledge', $alert)
@@ -141,7 +208,7 @@
             <h2 class="h5">Recently acknowledged</h2>
             @forelse ($acknowledgedAlerts as $alert)
                 <div class="border rounded bg-white p-2 mb-2 small">
-                    <strong>{{ $alert->domain->value }}</strong> fell by {{ $alert->score_drop }} in {{ $alert->trend->assessment->cycle_label }}
+                    @include('trends.partials.alert-summary', ['alert' => $alert, 'compact' => true])
                     <div class="text-muted">Acknowledged by {{ $alert->acknowledgedBy?->name ?? 'a former user' }} on {{ $alert->acknowledged_at->format('j M Y, H:i') }}</div>
                 </div>
             @empty

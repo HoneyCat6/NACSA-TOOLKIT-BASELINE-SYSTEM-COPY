@@ -15,4 +15,9 @@ class DegradationAlertPolicy
     {
         return $user->hasRole(Role::ComplianceOfficer);
     }
+
+    public function acknowledgeAll(User $user): bool
+    {
+        return $user->hasRole(Role::ComplianceOfficer);
+    }
 }

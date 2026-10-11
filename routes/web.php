@@ -1,5 +1,8 @@
 <?php
 
+use App\Http\Controllers\Admin\AuditLogController;
+use App\Http\Controllers\Admin\SettingsController;
+use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\AlertController;
 use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\AuthController;
@@ -32,16 +35,35 @@ Route::middleware(['auth', 'mfa'])->group(function () {
     Route::middleware('password.fresh')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
+        Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
+            Route::get('/users', [UserController::class, 'index'])->name('users.index');
+            Route::get('/users/create', [UserController::class, 'create'])->name('users.create');
+            Route::post('/users', [UserController::class, 'store'])->name('users.store');
+            Route::get('/users/{user}/edit', [UserController::class, 'edit'])->name('users.edit');
+            Route::patch('/users/{user}', [UserController::class, 'update'])->name('users.update');
+            Route::delete('/users/{user}', [UserController::class, 'deactivate'])->name('users.deactivate');
+            Route::post('/users/{user}/reactivate', [UserController::class, 'reactivate'])->name('users.reactivate');
+            Route::post('/users/{user}/password-reset', [UserController::class, 'sendPasswordReset'])
+                ->middleware('throttle:6,1')
+                ->name('users.password-reset');
+
+            Route::get('/audit-logs', [AuditLogController::class, 'technical'])->name('audit-logs.index');
+
+            Route::get('/settings', [SettingsController::class, 'edit'])->name('settings.edit');
+            Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');
+        });
+
         Route::middleware('role:compliance_officer')->group(function () {
+            Route::get('/assessments', [AssessmentController::class, 'index'])->name('assessments.index');
             Route::get('/assessments/upload', [AssessmentController::class, 'showUpload'])->name('assessments.upload');
             Route::post('/assessments', [AssessmentController::class, 'store'])->name('assessments.store');
+            Route::get('/assessments/{assessment}', [AssessmentController::class, 'show'])->name('assessments.show');
             Route::delete('/assessments/{assessment}', [AssessmentController::class, 'destroy'])->name('assessments.destroy');
+            Route::post('/alerts/acknowledge-all', [AlertController::class, 'acknowledgeAll'])->name('alerts.acknowledge-all');
             Route::post('/alerts/{alert}/acknowledge', [AlertController::class, 'acknowledge'])->name('alerts.acknowledge');
         });
 
         Route::middleware('role:compliance_officer,executive_reviewer')->group(function () {
-            Route::get('/assessments', [AssessmentController::class, 'index'])->name('assessments.index');
-            Route::get('/assessments/{assessment}', [AssessmentController::class, 'show'])->name('assessments.show');
             Route::get('/trends', [TrendController::class, 'index'])->name('trends.index');
         });
     });

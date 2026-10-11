@@ -19,13 +19,12 @@ class AssessmentPagesTest extends TestCase
         Assessment::factory()->for($uploader, 'creator')->create(['cycle_label' => 'Cycle 2025 H1', 'assessment_date' => '2025-03-01']);
         Assessment::factory()->for($uploader, 'creator')->create(['cycle_label' => 'Cycle 2025 H2', 'assessment_date' => '2025-09-01']);
 
-        $this->signIn(User::factory()->executiveReviewer()->create())
+        $this->signIn($uploader)
             ->get('/assessments')
             ->assertOk()
             ->assertSeeInOrder(['Cycle 2025 H2', 'Cycle 2025 H1'])
             ->assertSeeText('Aina Officer')
-            ->assertSeeText('Validated')
-            ->assertDontSeeText('Upload assessment');
+            ->assertSeeText('Validated');
     }
 
     public function test_history_shows_an_empty_state_with_no_cycles(): void
@@ -64,15 +63,27 @@ class AssessmentPagesTest extends TestCase
         $this->signIn(User::factory()->executiveReviewer()->create())->get('/assessments/upload')->assertForbidden();
     }
 
-    public function test_executive_reviewer_can_open_a_result(): void
+    public function test_officer_can_open_a_result(): void
     {
         $assessment = Assessment::factory()->create(['cycle_label' => 'Cycle 2026 H1']);
 
-        $this->signIn(User::factory()->executiveReviewer()->create())
+        $this->signIn(User::factory()->complianceOfficer()->create())
             ->get(route('assessments.show', $assessment))
             ->assertOk()
             ->assertSeeText('Cycle 2026 H1')
             ->assertSeeText('Share of the 33 elements with at least one control implemented')
             ->assertSeeText('Average element maturity within each domain (0–3)');
+    }
+
+    /**
+     * DECISIONS D-37: executives get dashboards and reports only (proposal Table 3.4), not history or element results.
+     */
+    public function test_executive_reviewer_cannot_open_history_or_results(): void
+    {
+        $assessment = Assessment::factory()->create();
+        $executive = User::factory()->executiveReviewer()->create();
+
+        $this->signIn($executive)->get('/assessments')->assertForbidden();
+        $this->signIn($executive)->get(route('assessments.show', $assessment))->assertForbidden();
     }
 }

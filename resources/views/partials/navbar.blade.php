@@ -16,11 +16,27 @@
                         <a class="nav-link @if (request()->routeIs('assessments.index', 'assessments.show')) active @endif"
                            href="{{ route('assessments.index') }}">Assessments</a>
                     </li>
+                @endcan
+                @can('viewTrends', App\Models\Assessment::class)
                     <li class="nav-item">
                         <a class="nav-link @if (request()->routeIs('trends.index')) active @endif"
                            href="{{ route('trends.index') }}">Trends</a>
                     </li>
                 @endcan
+                @if (auth()->user()->hasRole(App\Enums\Role::Admin))
+                    <li class="nav-item">
+                        <a class="nav-link @if (request()->routeIs('admin.users.*')) active @endif"
+                           href="{{ route('admin.users.index') }}">Users</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link @if (request()->routeIs('admin.audit-logs.*')) active @endif"
+                           href="{{ route('admin.audit-logs.index') }}">Audit log</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link @if (request()->routeIs('admin.settings.*')) active @endif"
+                           href="{{ route('admin.settings.edit') }}">Settings</a>
+                    </li>
+                @endif
                 @can('create', App\Models\Assessment::class)
                     <li class="nav-item">
                         <a class="nav-link @if (request()->routeIs('assessments.upload')) active @endif"

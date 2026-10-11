@@ -40,6 +40,29 @@ class DegradationAlert extends Model
     }
 
     /**
+     * Set for element-level alerts, null for domain-level ones (DECISIONS D-36).
+     *
+     * @return BelongsTo<NcsbElement, $this>
+     */
+    public function ncsbElement(): BelongsTo
+    {
+        return $this->belongsTo(NcsbElement::class);
+    }
+
+    public function isForElement(): bool
+    {
+        return $this->ncsb_element_id !== null;
+    }
+
+    /**
+     * What declined: the element code, or the domain name.
+     */
+    public function subjectLabel(): string
+    {
+        return $this->isForElement() ? $this->ncsbElement->code : $this->domain->label();
+    }
+
+    /**
      * @return BelongsTo<User, $this>
      */
     public function acknowledgedBy(): BelongsTo

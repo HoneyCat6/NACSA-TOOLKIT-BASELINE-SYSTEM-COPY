@@ -13,7 +13,9 @@
             </div>
         </div>
         <div class="d-flex gap-2">
-            <a href="{{ route('assessments.show', $latest) }}" class="btn btn-outline-primary">View results</a>
+            @can('view', $latest)
+                <a href="{{ route('assessments.show', $latest) }}" class="btn btn-outline-primary">View results</a>
+            @endcan
             <a href="{{ route('trends.index') }}" class="btn btn-outline-secondary">Trends</a>
         </div>
     </div>

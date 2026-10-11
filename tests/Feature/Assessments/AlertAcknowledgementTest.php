@@ -3,8 +3,11 @@
 namespace Tests\Feature\Assessments;
 
 use App\Models\DegradationAlert;
+use App\Models\NcsbElement;
 use App\Models\User;
+use Database\Seeders\NcsbElementSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class AlertAcknowledgementTest extends TestCase
@@ -54,11 +57,46 @@ class AlertAcknowledgementTest extends TestCase
     public function test_executive_reviewer_cannot_acknowledge(): void
     {
         $alert = DegradationAlert::factory()->create();
+        $executive = User::factory()->executiveReviewer()->create();
 
-        $this->signIn(User::factory()->executiveReviewer()->create())
-            ->post(route('alerts.acknowledge', $alert))
-            ->assertForbidden();
+        $this->signIn($executive)->post(route('alerts.acknowledge', $alert))->assertForbidden();
+        $this->signIn($executive)->post(route('alerts.acknowledge-all'))->assertForbidden();
 
         $this->assertFalse($alert->fresh()->acknowledged);
+    }
+
+    public function test_officer_acknowledges_an_element_alert(): void
+    {
+        $this->seed(NcsbElementSeeder::class);
+        $alert = DegradationAlert::factory()->forElement(NcsbElement::query()->where('code', 'PR-03')->sole(), 2)->create();
+
+        $this->signIn(User::factory()->complianceOfficer()->create())->from('/trends')
+            ->post(route('alerts.acknowledge', $alert))
+            ->assertSessionHas('status', 'The PR-03 alert was acknowledged.');
+
+        $this->assertTrue($alert->fresh()->acknowledged);
+        $metadata = json_decode(DB::table('audit_logs')->where('action', 'alert.acknowledge')->value('metadata'), true);
+        $this->assertSame(['domain' => 'PROTECT', 'element_code' => 'PR-03'], $metadata);
+    }
+
+    public function test_acknowledge_all_clears_every_active_alert_and_audits_each(): void
+    {
+        $this->seed(NcsbElementSeeder::class);
+        $officer = User::factory()->complianceOfficer()->create();
+        $domainAlert = DegradationAlert::factory()->create();
+        $elementAlert = DegradationAlert::factory()->forElement(NcsbElement::query()->where('code', 'PR-03')->sole())->create();
+        $alreadyAcknowledged = DegradationAlert::factory()->acknowledged()->create();
+
+        $this->signIn($officer)->from('/trends')->post(route('alerts.acknowledge-all'))
+            ->assertRedirect('/trends')
+            ->assertSessionHas('status', '2 alerts acknowledged.');
+
+        $this->assertSame($officer->id, $domainAlert->fresh()->acknowledged_by);
+        $this->assertSame($officer->id, $elementAlert->fresh()->acknowledged_by);
+        $this->assertNotSame($officer->id, $alreadyAcknowledged->fresh()->acknowledged_by);
+        $this->assertSame(
+            [$domainAlert->id, $elementAlert->id],
+            DB::table('audit_logs')->where('action', 'alert.acknowledge')->orderBy('auditable_id')->pluck('auditable_id')->all(),
+        );
     }
 }
