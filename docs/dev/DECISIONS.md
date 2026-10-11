@@ -1,7 +1,7 @@
 # Decisions Log
 ## NACSA Toolkit Baseline System
 
-**Companion to:** `PRD.md` v1.0, `TECH_SPEC.md` v1.0
+**Companion to:** `PRD.md` v1.1, `TECH_SPEC.md` v1.1
 **Date:** 24 September 2026
 **Status:** Accepted by author (spec review, 24 Sep 2026)
 
@@ -15,7 +15,7 @@ These decisions resolve gaps and contradictions found while reviewing the PRD an
 |---|---|---|
 | D-01 | **Laravel 13.x on PHP 8.3** (the installed project). Nothing in the spec depends on Laravel 11. | TS §0, PRD §5 |
 | D-02 | **No Laravel Breeze.** Breeze does not support Laravel 13. Authentication (login, OTP, password change/expiry, password reset) is hand-written in `AuthController` and related classes. Password reset uses Laravel's built-in password broker. | TS §2.2, PRD §5 |
-| D-03 | **MySQL 8** on port 3306. Tests run against a separate MySQL database `nacsa_toolkit_test`, not SQLite. | TS §1.3 (confirmed) |
+| D-03 | **MariaDB 11.4** (WampServer) on port **3307**, Laravel `mariadb` driver, `utf8mb4` / `utf8mb4_unicode_ci`. Tests run against a separate MariaDB database `nacsa_toolkit_test`, not SQLite. The connection forces **InnoDB** (`DB_ENGINE`, default `InnoDB`) because WampServer's MariaDB `my.ini` defaults to MyISAM, which has no foreign keys or transactions and a 1000-byte key limit. *Revised 11 Oct 2026 — was MySQL 8 on 3306.* | PRD v1.1 §9.4, TS v1.1 §1.3 (confirmed) |
 | D-04 | **Bootstrap 5.3 + Alpine.js 3 + Chart.js 4 bundled through Vite** (npm). Tailwind removed. Bundling means the demo works offline. | TS §13.1 (CDN) |
 | D-05 | Development server is `php artisan serve` (project lives at `P:\LARAVEL\nacsa-toolkit-baseline`, not `C:\wamp64\www`). | TS §1.5 |
 | D-06 | Laravel Boost installed as a dev dependency (per repository `CLAUDE.md`). | — |

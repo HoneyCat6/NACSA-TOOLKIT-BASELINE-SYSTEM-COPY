@@ -1,10 +1,9 @@
 # Technical Specification
 ## NACSA Toolkit Baseline System
 
-**Version:** 1.0
-**Date:** 21 September 2026
-**Companion to:** `PRD.md` v1.0
-**Amended by:** `DECISIONS.md` (24 Sep 2026) — takes precedence where it conflicts with this document
+**Version:** 1.1 — *database changed from MySQL 8 to MariaDB (§0, §1.1, §1.3, §2.3, §5.7, §15.1, Appendix A)*
+**Date:** 11 October 2026
+**Companion to:** `PRD.md` v1.1
 **Target environment:** Local development — WampServer (Windows)
 **Author:** Muhammad Zarif Irfan bin Zalali (1230551)
 
@@ -16,7 +15,8 @@
 |---|---|---|
 | Framework | Laravel 11 | Laravel 12 is structurally identical — swap the version constraint, nothing else in this spec changes |
 | PHP | 8.2 minimum, 8.3 preferred | WampServer ships multiple versions; switch via the tray icon |
-| Database | MySQL 8.0 | WampServer bundles both MySQL and MariaDB — see §1.3, pick one and stay on it |
+| Database | **MariaDB 10.6+ / 11.x** | WampServer bundles MySQL *and* MariaDB on different ports — §1.3 shows how to confirm you are on the right one |
+| DB connection driver | `mariadb` (Laravel 11+) | **Not** `mysql` — Laravel 11 added a dedicated MariaDB driver; see §2.3 |
 | Web server | Apache (WampServer) | Not nginx |
 | Front-end | Blade + Bootstrap 5.3 + Alpine.js 3 + Chart.js 4 | No build step, no npm required (CDN acceptable for local) |
 | Queue driver | `database` | Requires a manual worker process — §12.4 |
@@ -34,7 +34,7 @@
 | Component | Version | Check |
 |---|---|---|
 | PHP | ≥ 8.2 | `php -v` |
-| MySQL | 8.0 | `mysql --version` |
+| **MariaDB** | 10.6+ / 11.x | `mysql -u root -P <port> -e "SELECT VERSION();"` — must contain `-MariaDB` |
 | Composer | ≥ 2.6 | `composer -V` |
 | Node.js | Optional | Only if you compile assets instead of using CDN |
 | Git | Any | For version control / supervisor submission |
@@ -48,7 +48,7 @@ WampServer disables several of these by default. Enable them via **tray icon →
 | Extension | Needed for |
 |---|---|
 | `openssl` | Encryption (SEC-05), HTTPS mail transport |
-| `pdo_mysql` | Database |
+| `pdo_mysql` | Database — **this is the correct extension for MariaDB too**; there is no `pdo_mariadb` |
 | `mbstring` | Laravel core |
 | `fileinfo` | Upload MIME validation (SEC-07) |
 | `zip` | PhpSpreadsheet — **xlsx files are zip archives** |
@@ -63,25 +63,46 @@ Verify all at once:
 php -m | findstr /I "openssl pdo_mysql mbstring fileinfo zip gd curl xml intl"
 ```
 
-### 1.3 MySQL vs MariaDB
+### 1.3 MariaDB setup
 
-WampServer runs **both** and they listen on different ports. MySQL 8 is typically `3306`, MariaDB `3307` — but WampServer sometimes reverses this.
+WampServer runs **MySQL and MariaDB simultaneously** on different ports. MySQL is typically `3306` and MariaDB `3307`, but WampServer sometimes reverses this — never assume.
 
-**Confirm which you're on before creating the database:**
+**Step 1 — find the MariaDB port.** WampServer tray icon → MariaDB → the version submenu shows the port. Or test both:
 
 ```bash
 mysql -u root -P 3306 -e "SELECT VERSION();"
+mysql -u root -P 3307 -e "SELECT VERSION();"
 ```
 
-If it returns `10.x.x-MariaDB` you are on MariaDB. This spec assumes MySQL 8; MariaDB works but its JSON column handling differs subtly. Pick one, put the correct port in `.env`, and do not switch mid-project.
+The one returning something like `10.11.x-MariaDB` or `11.4.x-MariaDB` is your target. A result like `8.0.x` is MySQL — wrong port.
 
-Create the database:
+**Step 2 — make MariaDB the default in WampServer** (optional but prevents confusion): tray icon → Tools → "Switch default DBMS to MariaDB". The service then answers on `3306` and you can drop the `-P` flag everywhere.
+
+**Step 3 — create the database:**
 
 ```sql
 CREATE DATABASE nacsa_toolkit
   CHARACTER SET utf8mb4
   COLLATE utf8mb4_unicode_ci;
 ```
+
+> Use `utf8mb4_unicode_ci` explicitly. MariaDB's default is `utf8mb4_general_ci` and MySQL 8's is `utf8mb4_0900_ai_ci` — which **does not exist in MariaDB**. Any migration or SQL dump copied from a MySQL 8 tutorial that names that collation will fail outright.
+
+**Step 4 — record the port in `.env`** and do not switch engines mid-project. The two produce different `SHOW CREATE TABLE` output, which would make your Chapter 4 schema evidence inconsistent with your running system.
+
+### 1.3.1 MariaDB constraints affecting this build
+
+Five differences from MySQL 8 affect the schema. Each fails at migration or runtime, not at design time — build against them from the start. (Mirrors PRD §9.4.)
+
+| # | Difference | Required action in this spec |
+|---|---|---|
+| 1 | **No native JSON type.** MariaDB's `JSON` is an alias for `LONGTEXT` with a `json_valid()` CHECK constraint. | Encrypted columns use `text`, never `json` — ciphertext is not valid JSON and the CHECK rejects it. Already applied in §5.4, §5.9. |
+| 2 | **No expression defaults on JSON columns.** | `lead_days` is declared nullable with the default set in the model — §5.7. |
+| 3 | **JSON/longtext columns cannot be indexed directly.** | No index is placed on `lead_days` or `metadata`. If you later need a JSON query, add a generated column and index that. |
+| 4 | **Default collation differs.** | Database and connection pinned to `utf8mb4_unicode_ci` — §1.3, §2.3. |
+| 5 | **767-byte index limit on non-DYNAMIC row format.** | Confirm `innodb_default_row_format = dynamic`. On a "Specified key was too long" error, add `Schema::defaultStringLength(191);` to `AppServiceProvider::boot()`. |
+
+Unaffected and behaving identically: `ENUM`, `DECIMAL`, foreign keys, `nullableMorphs`, composite unique indexes, and `UniqueConstraintViolationException` (which carries the FR-41 exactly-once guarantee — MariaDB raises the same error code 1062).
 
 ### 1.4 php.ini adjustments
 
@@ -158,9 +179,9 @@ APP_DEBUG=true
 APP_TIMEZONE=Asia/Kuala_Lumpur
 APP_URL=http://nacsa.test
 
-DB_CONNECTION=mysql
+DB_CONNECTION=mariadb        # Laravel 11+ dedicated driver — NOT "mysql"
 DB_HOST=127.0.0.1
-DB_PORT=3306                 # verify per §1.3
+DB_PORT=3307                 # MariaDB port — VERIFY per §1.3, WampServer varies
 DB_DATABASE=nacsa_toolkit
 DB_USERNAME=root
 DB_PASSWORD=                 # WampServer default root password is empty
@@ -188,6 +209,15 @@ PASSWORD_EXPIRY_DAYS=90
 ASSESSMENT_MAX_SIZE_KB=10240
 NCSB_TEMPLATE_VERSION=v1.4
 REPORT_TOP_ACTIONS=10
+```
+
+> **Use the `mariadb` driver, not `mysql`.** Laravel 11 added a dedicated MariaDB connection. Pointing `DB_CONNECTION=mysql` at a MariaDB server still *works*, but Laravel then applies MySQL 8 version detection and will emit MySQL-only SQL for some schema operations. Confirm `config/database.php` contains a `mariadb` entry (Laravel 11 skeletons do; if yours predates it, copy the `mysql` block, rename the key to `mariadb`, and nothing else).
+
+Pin the collation in `config/database.php` under the `mariadb` connection:
+
+```php
+'charset'   => 'utf8mb4',
+'collation' => 'utf8mb4_unicode_ci',   // NOT utf8mb4_0900_ai_ci — MySQL-only
 ```
 
 ```bash
@@ -623,7 +653,7 @@ Schema::create('compliance_deadlines', function (Blueprint $table) {
     $table->string('title');
     $table->text('description')->nullable();
     $table->date('due_date');
-    $table->json('lead_days')->default(new Expression("(JSON_ARRAY(30,14,7))"));
+    $table->json('lead_days')->nullable();       // MariaDB: no expression default — set in the model
     $table->foreignId('secondary_contact_id')->nullable()->constrained('users')->nullOnDelete();
     $table->enum('status', ['upcoming','due_soon','overdue','met'])->default('upcoming');
     $table->timestamp('acknowledged_at')->nullable();
@@ -634,7 +664,21 @@ Schema::create('compliance_deadlines', function (Blueprint $table) {
 });
 ```
 
-> On MariaDB the `JSON_ARRAY` default expression fails. Use `$table->json('lead_days')->nullable();` and set the default in the model's `$attributes` instead.
+> **MariaDB: no SQL-level default on a JSON column.** `->default(new Expression("(JSON_ARRAY(30,14,7))"))` works on MySQL 8 and fails on MariaDB, because its `JSON` is a `LONGTEXT` alias and `LONGTEXT` cannot take a default. Set the default in the model instead:
+
+```php
+// app/Models/ComplianceDeadline.php
+protected $attributes = [
+    'lead_days' => '[30,14,7]',    // raw JSON string — the cast decodes it
+];
+
+protected function casts(): array
+{
+    return ['lead_days' => 'array', 'due_date' => 'date'];
+}
+```
+
+> Also note: **no index may be placed on `lead_days`.** MariaDB cannot index a `LONGTEXT` column without a prefix length or a generated column. The schema above places none — keep it that way.
 
 ### 5.8 `deadline_notifications`
 
@@ -1577,6 +1621,7 @@ DB::transaction(function () use ($scored, $file, $request) {
 `phpunit.xml` — use a separate database, never your dev one:
 
 ```xml
+<env name="DB_CONNECTION" value="mariadb"/>
 <env name="DB_DATABASE" value="nacsa_toolkit_test"/>
 <env name="QUEUE_CONNECTION" value="sync"/>
 <env name="MAIL_MAILER" value="array"/>
@@ -1586,7 +1631,7 @@ DB::transaction(function () use ($scored, $file, $request) {
 CREATE DATABASE nacsa_toolkit_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-> SQLite in-memory is faster but its JSON and enum handling differs from MySQL enough to hide real bugs. Use a real MySQL test database.
+> **Test against real MariaDB, not SQLite.** SQLite in-memory is much faster, but it has no `ENUM` type (Laravel silently degrades it to `varchar`), different JSON semantics, and no `json_valid()` CHECK constraint. Every one of those differences hides a bug this schema can actually hit — the encrypted-column-in-a-JSON-field failure in §1.3.1 passes cleanly on SQLite and fails on your real database. Use the same engine you deploy on.
 
 ### 15.2 Priority test list
 
@@ -1618,8 +1663,8 @@ Follow this sequence — each step is testable before the next begins.
 
 | # | Step | Done when |
 |---|---|---|
-| 1 | Environment per §1, project bootstrap per §2 | `php artisan --version` runs, app loads at `nacsa.test` |
-| 2 | Enums, migrations, models | `php artisan migrate:fresh` succeeds |
+| 1 | Environment per §1, project bootstrap per §2 | `php artisan --version` runs, app loads at `nacsa.test`, **`php artisan db:show` reports MariaDB** |
+| 2 | Enums, migrations, models | `php artisan migrate:fresh` succeeds against MariaDB with no CHECK-constraint or default errors |
 | 3 | **`NcsbElementSeeder` from the real xlsx** | 33 rows, `question_count` sums to 125 |
 | 4 | Auth + OTP + RBAC + audit | All three roles log in; policy tests pass |
 | 5 | `ExcelParserService` against a fixture | Real file parses to 125 booleans |
@@ -1641,16 +1686,27 @@ Follow this sequence — each step is testable before the next begins.
 ## Appendix A — Preflight Checklist
 
 ```bash
-php -v                    # expect 8.2+
-php -m                    # expect openssl, pdo_mysql, zip, gd, fileinfo, mbstring, intl
-composer -V               # expect 2.6+
-mysql -u root -e "SELECT VERSION();"   # confirm MySQL vs MariaDB, note the port
+php -v                                   # expect 8.2+
+php -m                                   # expect openssl, pdo_mysql, zip, gd, fileinfo, mbstring, intl
+composer -V                              # expect 2.6+
+mysql -u root -P 3306 -e "SELECT VERSION();"   # which engine is on 3306?
+mysql -u root -P 3307 -e "SELECT VERSION();"   # which engine is on 3307?
+```
+
+After `composer install` and `.env` setup, confirm Laravel agrees:
+
+```bash
+php artisan db:show        # Connection should read "mariadb", Version "10.x/11.x-MariaDB"
 ```
 
 | Check | Expected | Fix if wrong |
 |---|---|---|
 | PHP on PATH | `php -v` works from any directory | Add `C:\wamp64\bin\php\php8.2.x` to system PATH |
 | `zip` extension | Listed in `php -m` | Enable via WampServer tray → PHP → PHP extensions |
+| **MariaDB, not MySQL** | `SELECT VERSION()` contains `-MariaDB` | Change `DB_PORT` to the other port (§1.3) |
+| **`DB_CONNECTION=mariadb`** | `php artisan db:show` reports connection `mariadb` | Fix `.env`; confirm `config/database.php` has a `mariadb` block (§2.3) |
+| **Collation** | `utf8mb4_unicode_ci` on database and connection | Recreate the database; never use `utf8mb4_0900_ai_ci` (MySQL-only) |
+| **Row format** | `innodb_default_row_format = dynamic` | On "key too long", add `Schema::defaultStringLength(191);` to `AppServiceProvider::boot()` |
 | CLI and Apache php.ini both edited | `upload_max_filesize` = 12M in both | They are separate files (§1.4) |
 | `storage/` writable | No permission errors on upload | Usually fine on Windows |
 | `APP_KEY` set and backed up | `.env` has a value | `php artisan key:generate` — once, then back up |

@@ -1,8 +1,11 @@
 <?php
 
+use App\Http\Controllers\AlertController;
+use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\TrendController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
@@ -28,5 +31,17 @@ Route::middleware(['auth', 'mfa'])->group(function () {
 
     Route::middleware('password.fresh')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+        Route::middleware('role:compliance_officer')->group(function () {
+            Route::get('/assessments/upload', [AssessmentController::class, 'showUpload'])->name('assessments.upload');
+            Route::post('/assessments', [AssessmentController::class, 'store'])->name('assessments.store');
+            Route::post('/alerts/{alert}/acknowledge', [AlertController::class, 'acknowledge'])->name('alerts.acknowledge');
+        });
+
+        Route::middleware('role:compliance_officer,executive_reviewer')->group(function () {
+            Route::get('/assessments', [AssessmentController::class, 'index'])->name('assessments.index');
+            Route::get('/assessments/{assessment}', [AssessmentController::class, 'show'])->name('assessments.show');
+            Route::get('/trends', [TrendController::class, 'index'])->name('trends.index');
+        });
     });
 });

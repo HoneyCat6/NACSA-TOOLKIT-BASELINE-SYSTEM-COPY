@@ -18,7 +18,7 @@ return new class extends Migration
             $table->string('title');
             $table->text('description')->nullable();
             $table->date('due_date');
-            $table->json('lead_days');
+            $table->json('lead_days')->nullable();
             $table->foreignId('secondary_contact_id')->nullable()->constrained('users')->nullOnDelete();
             $table->enum('status', DeadlineStatus::values())->default(DeadlineStatus::Upcoming->value);
             $table->timestamp('acknowledged_at')->nullable();

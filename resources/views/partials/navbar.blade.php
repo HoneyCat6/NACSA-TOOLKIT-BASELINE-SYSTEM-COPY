@@ -11,6 +11,22 @@
                     <a class="nav-link @if (request()->routeIs('dashboard')) active @endif"
                        href="{{ route('dashboard') }}">Dashboard</a>
                 </li>
+                @can('viewAny', App\Models\Assessment::class)
+                    <li class="nav-item">
+                        <a class="nav-link @if (request()->routeIs('assessments.index', 'assessments.show')) active @endif"
+                           href="{{ route('assessments.index') }}">Assessments</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link @if (request()->routeIs('trends.index')) active @endif"
+                           href="{{ route('trends.index') }}">Trends</a>
+                    </li>
+                @endcan
+                @can('create', App\Models\Assessment::class)
+                    <li class="nav-item">
+                        <a class="nav-link @if (request()->routeIs('assessments.upload')) active @endif"
+                           href="{{ route('assessments.upload') }}">Upload</a>
+                    </li>
+                @endcan
             </ul>
             <div class="d-flex align-items-center gap-3">
                 <span class="navbar-text small">

@@ -34,4 +34,15 @@ enum Severity: string
             self::Unanswered => '#adb5bd',
         };
     }
+
+    /**
+     * Readable text colour on top of colour().
+     */
+    public function textColour(): string
+    {
+        return match ($this) {
+            self::Compliant, self::Critical => '#ffffff',
+            self::Low, self::High, self::Unanswered => '#212529',
+        };
+    }
 }

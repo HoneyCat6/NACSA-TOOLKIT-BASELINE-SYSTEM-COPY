@@ -2,12 +2,14 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Enums\Role;
 use App\Mail\OtpMail;
 use App\Models\AuditLog;
 use App\Models\User;
 use Database\Factories\UserFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class LoginTest extends TestCase
@@ -44,9 +46,22 @@ class LoginTest extends TestCase
         $this->assertNotSame($code, $user->fresh()->otp_code);
     }
 
-    public function test_correct_otp_completes_login_and_is_audited(): void
+    /**
+     * @return array<string, array{Role, string}>
+     */
+    public static function roleDashboards(): array
     {
-        $user = User::factory()->create();
+        return [
+            'admin' => [Role::Admin, 'dashboard.admin'],
+            'compliance officer' => [Role::ComplianceOfficer, 'dashboard.officer'],
+            'executive reviewer' => [Role::ExecutiveReviewer, 'dashboard.executive'],
+        ];
+    }
+
+    #[DataProvider('roleDashboards')]
+    public function test_correct_otp_completes_login_and_is_audited(Role $role, string $dashboardView): void
+    {
+        $user = User::factory()->create(['role' => $role]);
 
         $this->post('/login', ['email' => $user->email, 'password' => UserFactory::Password]);
         $this->post('/otp', ['code' => $this->sentCode()])->assertRedirect(route('dashboard'));
@@ -55,7 +70,7 @@ class LoginTest extends TestCase
         $this->assertNull($user->fresh()->otp_code);
         $this->assertNotNull($user->fresh()->mfa_verified_at);
         $this->assertDatabaseHas('audit_logs', ['action' => 'login.success', 'user_id' => $user->id, 'category' => 'technical']);
-        $this->get('/dashboard')->assertOk();
+        $this->get('/dashboard')->assertOk()->assertViewIs($dashboardView);
     }
 
     public function test_wrong_password_is_rejected_and_audited(): void

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Enums\Role;
+use App\Models\Assessment;
+use App\Models\DegradationAlert;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -15,8 +17,18 @@ class DashboardController extends Controller
     {
         return match ($request->user()->role) {
             Role::Admin => view('dashboard.admin'),
-            Role::ComplianceOfficer => view('dashboard.officer'),
-            Role::ExecutiveReviewer => view('dashboard.executive'),
+            Role::ComplianceOfficer => view('dashboard.officer', [
+                'latest' => $this->latestAssessment(),
+                'activeAlertCount' => DegradationAlert::query()->active()->count(),
+            ]),
+            Role::ExecutiveReviewer => view('dashboard.executive', [
+                'latest' => $this->latestAssessment(),
+            ]),
         };
+    }
+
+    private function latestAssessment(): ?Assessment
+    {
+        return Assessment::query()->orderByDesc('assessment_date')->orderByDesc('id')->first();
     }
 }

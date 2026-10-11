@@ -23,6 +23,19 @@ enum Band: string
     }
 
     /**
+     * Shares the heatmap colour semantics so every surface uses one palette (PRD §11).
+     */
+    public function severity(): Severity
+    {
+        return match ($this) {
+            self::Initial => Severity::Critical,
+            self::Basic => Severity::High,
+            self::Intermediate => Severity::Low,
+            self::Advanced => Severity::Compliant,
+        };
+    }
+
+    /**
      * @return list<string>
      */
     public static function values(): array

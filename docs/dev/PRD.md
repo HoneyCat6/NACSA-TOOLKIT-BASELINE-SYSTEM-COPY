@@ -1,13 +1,12 @@
 # Product Requirements Document (PRD)
 ## NACSA Toolkit Baseline System
 
-**Version:** 1.0
-**Date:** 21 September 2026
+**Version:** 1.1 — *database changed from MySQL 8 to MariaDB (§1, §5, §9.1, §9.4, §14, §15 R9)*
+**Date:** 11 October 2026
 **Author:** Muhammad Zarif Irfan bin Zalali (1230551)
 **Supervisor:** PM Dr. Ir. Mohd Fared Abdul Khir
 **Programme:** BCompSc (Hons) Information Security and Assurance, USIM
 **Source:** Thesis Proposal — *NACSA Toolkit Baseline System* (Chapters 1–5)
-**Amended by:** `DECISIONS.md` (24 Sep 2026) — takes precedence where it conflicts with this document
 
 ---
 
@@ -22,6 +21,7 @@ This PRD is the single build specification for the NACSA Toolkit Baseline System
 | Tenancy | **Single-organization deployment** | ERD stays as Figure 4.2. No `organizations` table. NFR "multi-organization support" is re-scoped to *concurrent multi-user*, and recorded as a limitation in §14. |
 | NCSB v1.4 Excel template | **Available to author** | Parser contract is specified here as a placeholder; exact sheet/cell map is a Sprint 1 deliverable (§7.2, Appendix A). |
 | Front-end | **Blade + Bootstrap 5 + Alpine.js + Chart.js** | Faithful to §3.6 of the proposal. Alpine drives heatmap interactions and simulator sliders; Chart.js draws trend lines. |
+| Database | **MariaDB 10.6+ / 11.x** | Changed from MySQL 8. Five schema-level differences apply — see §9.4. Thesis Table 4.4 needs the same correction (§15, R9). |
 | PRD depth | **Full build spec** | Schema, routes, pseudocode, acceptance criteria included. |
 
 ---
@@ -122,7 +122,7 @@ This PRD is the single build specification for the NACSA Toolkit Baseline System
 | Layer | Technology | Notes |
 |---|---|---|
 | Framework | Laravel 11 (PHP 8.2+) | MVC, migrations, queues, scheduler |
-| Database | MySQL 8.0 | InnoDB, utf8mb4 |
+| Database | **MariaDB 10.6+ / 11.x** | InnoDB, `utf8mb4` / `utf8mb4_unicode_ci`. See §9.4 for MariaDB-specific schema constraints. |
 | Templating | Blade | Layout inheritance, components |
 | CSS | Bootstrap 5.3 | Grid, cards, tables, modals |
 | Interactivity | Alpine.js 3.x | Heatmap cell drill-down, simulator sliders, live recalculation |
@@ -536,7 +536,7 @@ Based on Figure 4.2 (ERD), extended with the reference and audit tables the impl
 | yes_count | tinyint | |
 | maturity_level | tinyint nullable | null = unanswered |
 | status | enum | `scored`, `unanswered` |
-| responses | json | **encrypted** — the raw Yes/No array for this element |
+| responses | text | **encrypted** — the raw Yes/No array for this element. Must be `text`, not `json`: ciphertext is not valid JSON and MariaDB's `json_valid()` CHECK constraint rejects it. |
 
 Index: `(assessment_id, domain)`, `(assessment_id, element_code)`
 
@@ -573,7 +573,7 @@ Index: `(assessment_id, domain)`, `(assessment_id, element_code)`
 | title | varchar(255) | |
 | description | text nullable | |
 | due_date | date | |
-| lead_days | json | e.g. `[30,14,7]` |
+| lead_days | json (nullable) | e.g. `[30,14,7]`. **No SQL-level default on MariaDB** — set `[30,14,7]` in the model's `$attributes`. See §9.4. |
 | secondary_contact_id | bigint FK → users nullable | escalation target |
 | status | enum | `upcoming`, `due_soon`, `overdue`, `met` |
 | acknowledged_at | timestamp nullable | |
@@ -603,7 +603,7 @@ Unique: `(compliance_deadline_id, type, lead_day)` — guarantees FR-41 exactly-
 | created_by | bigint FK → users | |
 | baseline_assessment_id | bigint FK | |
 | scenario_name | varchar(255) | |
-| modified_responses | json | **encrypted** — `{element_code: level}` |
+| modified_responses | text | **encrypted** — `{element_code: level}` (see note on `assessment_elements.responses`) |
 | simulated_score | decimal(4,3) | projected overall |
 | simulated_band | enum | |
 | timestamps | | |
@@ -616,7 +616,7 @@ Unique: `(compliance_deadline_id, type, lead_day)` — guarantees FR-41 exactly-
 | assessment_id | bigint FK | |
 | generated_by | bigint FK → users | |
 | file_path | varchar(255) | private disk |
-| payload | json | **encrypted** — narratives + prioritised actions, for reproducibility |
+| payload | text | **encrypted** — narratives + prioritised actions, for reproducibility |
 | generated_at | timestamp | |
 
 **`audit_logs`**
@@ -650,6 +650,36 @@ Unique: `(compliance_deadline_id, type, lead_day)` — guarantees FR-41 exactly-
 ### 9.3 Encryption at rest (Security Requirement, Table 3.4)
 
 Apply Eloquent `encrypted` / `encrypted:array` casts to: `assessment_elements.responses`, `simulation_sessions.modified_responses`, `executive_reports.payload`. Uploaded `.xlsx` files are stored on a **private** disk, never in `public/`.
+
+### 9.4 MariaDB compatibility notes
+
+The system targets **MariaDB 10.6+ / 11.x**, not MySQL 8. Laravel supports MariaDB fully, but five differences affect this schema. Build against them from the start — each one fails at migration or runtime, not at design time.
+
+| # | Difference | Effect on this schema | Required action |
+|---|---|---|---|
+| 1 | **No native JSON type.** MariaDB's `JSON` is an alias for `LONGTEXT` with a `json_valid()` CHECK constraint. | `lead_days`, `metadata` are stored as `longtext`; encrypted columns would be *rejected* by the CHECK constraint. | Encrypted columns use `text`, never `json` (already applied above). Plain JSON columns are fine as `json`. |
+| 2 | **No expression defaults on JSON columns.** `->default(new Expression("(JSON_ARRAY(30,14,7))"))` fails. | `compliance_deadlines.lead_days` cannot carry a SQL default. | Declare `$table->json('lead_days')->nullable();` and set the default in the model: `protected $attributes = ['lead_days' => '[30,14,7]'];` |
+| 3 | **JSON/longtext columns cannot be indexed directly.** | No index may be placed on `lead_days` or `metadata`. | Current schema places none. If a JSON-based query is ever needed, add a generated column and index that instead. |
+| 4 | **Default collation differs.** MariaDB defaults to `utf8mb4_general_ci`; MySQL 8 to `utf8mb4_0900_ai_ci` (which MariaDB does not have). | A migration copied from a MySQL tutorial may fail. | Set the database and connection explicitly to `utf8mb4` / `utf8mb4_unicode_ci` — supported identically on both engines. |
+| 5 | **`utf8mb4` + long unique indexes.** Older MariaDB defaults to a 767-byte index limit on non-DYNAMIC row format. | `users.email` unique index and `cycle_label` unique could fail on a misconfigured server. | Confirm `innodb_default_row_format = dynamic`. If a length error appears, call `Schema::defaultStringLength(191)` in `AppServiceProvider::boot()`. |
+
+**Everything else is unchanged.** `ENUM`, `DECIMAL`, foreign keys, `nullableMorphs`, composite unique indexes, and Laravel's `UniqueConstraintViolationException` (used for the FR-41 exactly-once guarantee) all behave identically on MariaDB.
+
+**Database creation:**
+
+```sql
+CREATE DATABASE nacsa_toolkit
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+```
+
+**Verify which engine you are actually connected to** before migrating — WampServer runs MySQL and MariaDB simultaneously on different ports:
+
+```bash
+mysql -u root -P 3307 -e "SELECT VERSION();"
+```
+
+A result containing `-MariaDB` confirms the correct engine. Record the port in `.env` as `DB_PORT` and do not switch engines mid-project — the two produce different `SHOW CREATE TABLE` output, which will make your Chapter 4 schema evidence inconsistent.
 
 ---
 
@@ -796,7 +826,7 @@ Feedback instrument captures: task completion rate, information clarity, interfa
 
 | Sprint | Duration | Module | Deliverables | Exit criteria |
 |---|---|---|---|---|
-| **0** *(setup)* | 1 week | Foundation | Laravel install, MySQL, auth scaffold, RBAC middleware, audit service, **`ncsb_elements` seeder populated from the official v1.4 file** | 33 elements seeded with correct thresholds; 3 roles log in with OTP; audit rows written |
+| **0** *(setup)* | 1 week | Foundation | Laravel install, **MariaDB** database created per §9.4, auth scaffold, RBAC middleware, audit service, **`ncsb_elements` seeder populated from the official v1.4 file** | `SELECT VERSION()` confirms MariaDB; 33 elements seeded with correct thresholds; 3 roles log in with OTP; audit rows written |
 | **1** | 6 weeks | M1 Assessment & Trend Engine | Excel upload, template validation, extraction, scoring engine, cycle history, trend engine, degradation detection and flagging | A real NCSB v1.4 file uploads and scores correctly; a second cycle produces trend deltas and raises an alert on any decline |
 | **2** | 5 weeks | M2 Executive Summary Generator | Risk translation engine, narrative templates, prioritised remediation, board-ready PDF | PDF generates from a scored assessment with correct risk categories and a correctly ordered top-10 action list |
 | **3** | 4 weeks | M3 Alert Service | Deadline CRUD, scheduler sweep, multi-interval reminders, escalation workflow, notification history | Reminders fire once per interval; escalation triggers on unacknowledged overdue; all dispatches logged |
@@ -819,6 +849,7 @@ Feedback instrument captures: task completion rate, information clarity, interfa
 | R6 | Email deliverability in the demo environment | Risk | Use Mailtrap/log driver in development; document SMTP config for demo |
 | R7 | "Overall score" (share of elements implemented) is easily confused with domain averages | Design risk | Label both explicitly in every UI surface and in the report |
 | R8 | Domain risk weights (GOVERN, RESPOND ranked higher) are an author design decision, not NCSB doctrine | Assumption | State this explicitly in the thesis and in the report footnote |
+| R9 | **Thesis proposal Table 4.4 states "MySQL database managed through Laravel migrations" — the build now uses MariaDB** | **Documentation inconsistency** | Update Table 4.4 in the thesis to read "MariaDB database managed through Laravel migrations". A reviewer comparing the proposal against the implemented system will otherwise flag it. |
 
 ### Assumptions
 
@@ -906,7 +937,7 @@ Totals: 33 elements, 125 questions, 15 categories. Domain counts: GOVERN 7, IDEN
 
 RC-02 (Testing and Simulation) is frequency-based: each level's requirement is a single statement ("every 3 to 5 years", "biennially", "annually") rather than a cumulative list.
 
-The machine-readable version of this mapping is `database/seeders/data/ncsb-v1.4.json`.
+The machine-readable version of this mapping is `database/seeders/data/ncsb-v1.4.json`. `tests/Feature/NcsbReferenceDataTest.php` checks it against the workbook on every test run (sheet names, element names, question and requirement texts, response ranges, and thresholds obtained by evaluating each Dashboard formula for every Yes-count).
 
 ## Appendix B — Traceability Matrix
 
