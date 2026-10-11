@@ -77,9 +77,16 @@ class Assessment extends Model
     {
         return static::query()
             ->where('assessment_date', '<', $this->assessment_date)
-            ->orderByDesc('assessment_date')
-            ->orderByDesc('id')
+            ->newestFirst()
             ->first();
+    }
+
+    /**
+     * Only the most recent cycle can be deleted, so no other cycle's trend ever needs recomputing (DECISIONS D-35).
+     */
+    public function isLatest(): bool
+    {
+        return static::query()->newestFirst()->value('id') === $this->id;
     }
 
     /**
@@ -89,5 +96,14 @@ class Assessment extends Model
     protected function chronological(Builder $query): void
     {
         $query->orderBy('assessment_date')->orderBy('id');
+    }
+
+    /**
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function newestFirst(Builder $query): void
+    {
+        $query->orderByDesc('assessment_date')->orderByDesc('id');
     }
 }

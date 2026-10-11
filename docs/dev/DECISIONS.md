@@ -52,6 +52,7 @@ These decisions resolve gaps and contradictions found while reviewing the PRD an
 | D-32 | **Assessment dates must be strictly later than the latest existing cycle.** Back-dated uploads are rejected, so trend and alert history never goes stale. | PRD Assumption 3 |
 | D-33 | **Duplicate files (same SHA-256) are blocked** with *"This exact file was already uploaded as {cycle} on {date}."* | PRD §13.1, TS §14 |
 | D-34 | **Degradation alert emails go to all active Compliance Officers.** | FR-19 |
+| D-35 | **A Compliance Officer can permanently delete the latest cycle only** ("undo last upload"), giving a required reason. The assessment, its elements, trend, alerts and stored file are removed; an `audit_logs` row (`assessment.deleted`) keeps the cycle label, date, file name, score, band and reason. Earlier cycles cannot be deleted, so no other cycle's trend is ever recomputed; once the latest is deleted, the previous cycle becomes deletable. The same file and label can be uploaded again. *Added 11 Oct 2026.* | PRD §4.2 (new capability) |
 
 ## 5. Deadlines
 

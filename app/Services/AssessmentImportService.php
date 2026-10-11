@@ -77,6 +77,29 @@ class AssessmentImportService
     }
 
     /**
+     * D-35: permanently delete an uploaded cycle — its elements, trend, alerts and stored file.
+     *
+     * Only ever called for the latest cycle, so no other cycle's trend points at it.
+     */
+    public function undo(Assessment $assessment, string $reason, User $user): void
+    {
+        DB::transaction(function () use ($assessment, $reason, $user): void {
+            $this->audit->log('assessment.deleted', AuditCategory::Compliance, $assessment, [
+                'cycle_label' => $assessment->cycle_label,
+                'assessment_date' => $assessment->assessment_date->toDateString(),
+                'filename' => $assessment->original_filename,
+                'overall_score' => $assessment->overall_score,
+                'overall_band' => $assessment->overall_band->value,
+                'reason' => $reason,
+            ], $user);
+
+            $assessment->delete();
+        });
+
+        Storage::disk(self::Disk)->delete($assessment->stored_path);
+    }
+
+    /**
      * D-31: rejected uploads are not persisted as assessments, only audited.
      */
     public function recordRejection(UploadedFile $file, string $reason, ?User $uploader = null): void

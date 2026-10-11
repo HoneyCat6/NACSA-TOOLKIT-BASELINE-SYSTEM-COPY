@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\ElementStatus;
 use App\Exceptions\TemplateValidationException;
+use App\Http\Requests\DeleteAssessmentRequest;
 use App\Http\Requests\UploadAssessmentRequest;
 use App\Models\Assessment;
 use App\Models\AssessmentElement;
@@ -25,8 +26,7 @@ class AssessmentController extends Controller
         return view('assessments.index', [
             'assessments' => Assessment::query()
                 ->with('creator')
-                ->orderByDesc('assessment_date')
-                ->orderByDesc('id')
+                ->newestFirst()
                 ->get(),
         ]);
     }
@@ -38,8 +38,7 @@ class AssessmentController extends Controller
         return view('assessments.upload', [
             'recentAssessments' => Assessment::query()
                 ->with('creator')
-                ->orderByDesc('assessment_date')
-                ->orderByDesc('id')
+                ->newestFirst()
                 ->limit(5)
                 ->get(),
             'recentRejections' => AuditLog::query()
@@ -70,6 +69,15 @@ class AssessmentController extends Controller
         return redirect()
             ->route('assessments.show', $assessment)
             ->with('status', "{$assessment->cycle_label} was uploaded and scored.");
+    }
+
+    public function destroy(DeleteAssessmentRequest $request, Assessment $assessment, AssessmentImportService $importer): RedirectResponse
+    {
+        $importer->undo($assessment, $request->string('reason')->trim()->toString(), $request->user());
+
+        return redirect()
+            ->route('assessments.index')
+            ->with('status', "{$assessment->cycle_label} was deleted. You can upload a corrected file as a new cycle.");
     }
 
     public function show(Assessment $assessment): View

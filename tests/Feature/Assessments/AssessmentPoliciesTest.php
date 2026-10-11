@@ -42,4 +42,15 @@ class AssessmentPoliciesTest extends TestCase
         $this->assertSame($canUpload, $user->can('create', Assessment::class));
         $this->assertSame($canAcknowledge, $user->can('acknowledge', $alert));
     }
+
+    #[DataProvider('matrix')]
+    public function test_only_officers_may_delete_and_only_the_latest_cycle(Role $role, bool $canView, bool $canUpload): void
+    {
+        $user = User::factory()->create(['role' => $role]);
+        $earlier = Assessment::factory()->create(['assessment_date' => '2025-06-01']);
+        $latest = Assessment::factory()->create(['assessment_date' => '2026-01-01']);
+
+        $this->assertSame($canUpload, $user->can('delete', $latest));
+        $this->assertFalse($user->can('delete', $earlier));
+    }
 }

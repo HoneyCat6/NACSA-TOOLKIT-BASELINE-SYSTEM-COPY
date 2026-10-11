@@ -29,6 +29,6 @@ class DashboardController extends Controller
 
     private function latestAssessment(): ?Assessment
     {
-        return Assessment::query()->orderByDesc('assessment_date')->orderByDesc('id')->first();
+        return Assessment::query()->newestFirst()->first();
     }
 }

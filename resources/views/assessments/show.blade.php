@@ -190,4 +190,40 @@
             </table>
         </div>
     </div>
+
+    @can('delete', $assessment)
+        <div class="card border-danger shadow-sm mt-4" x-data="{ open: {{ Js::from($errors->has('reason')) }} }">
+            <div class="card-body">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div>
+                        <h2 class="h6 text-danger mb-1">Delete this cycle</h2>
+                        <p class="small text-muted mb-0">
+                            Permanently removes {{ $assessment->cycle_label }}, its results, trend and alerts, and the stored file.
+                            The deletion and your reason are kept in the audit log. The same file can be uploaded again afterwards.
+                        </p>
+                    </div>
+                    <button type="button" class="btn btn-outline-danger btn-sm" x-show="! open" @click="open = true">Delete cycle…</button>
+                </div>
+
+                <form method="POST" action="{{ route('assessments.destroy', $assessment) }}" class="mt-3" x-show="open" x-cloak
+                      @submit="if (! confirm({{ Js::from("Permanently delete {$assessment->cycle_label}? This cannot be undone.") }})) $event.preventDefault()">
+                    @csrf
+                    @method('DELETE')
+                    <label for="reason" class="form-label small fw-semibold">Reason</label>
+                    <textarea id="reason" name="reason" rows="2" maxlength="500" required
+                              placeholder="e.g. Wrong file uploaded — draft toolkit instead of the final version"
+                              class="form-control @error('reason') is-invalid @enderror">{{ old('reason') }}</textarea>
+                    @error('reason')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                    <div class="d-flex gap-2 mt-2">
+                        <button type="submit" class="btn btn-danger btn-sm">Delete permanently</button>
+                        <button type="button" class="btn btn-link btn-sm" @click="open = false">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    @elsecan('create', App\Models\Assessment::class)
+        <p class="small text-muted mt-4 mb-0">Only the latest cycle can be deleted, so earlier trends stay intact.</p>
+    @endcan
 @endsection

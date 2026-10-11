@@ -35,6 +35,7 @@ Route::middleware(['auth', 'mfa'])->group(function () {
         Route::middleware('role:compliance_officer')->group(function () {
             Route::get('/assessments/upload', [AssessmentController::class, 'showUpload'])->name('assessments.upload');
             Route::post('/assessments', [AssessmentController::class, 'store'])->name('assessments.store');
+            Route::delete('/assessments/{assessment}', [AssessmentController::class, 'destroy'])->name('assessments.destroy');
             Route::post('/alerts/{alert}/acknowledge', [AlertController::class, 'acknowledge'])->name('alerts.acknowledge');
         });
 

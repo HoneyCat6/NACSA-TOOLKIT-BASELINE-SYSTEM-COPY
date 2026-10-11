@@ -58,7 +58,7 @@ class UploadAssessmentRequest extends FormRequest
                     return;
                 }
 
-                $latest = Assessment::query()->orderByDesc('assessment_date')->orderByDesc('id')->first();
+                $latest = Assessment::query()->newestFirst()->first();
 
                 if ($latest !== null && $this->date('assessment_date')->lte($latest->assessment_date)) {
                     $validator->errors()->add('assessment_date', "The assessment date must be later than the latest cycle, {$latest->cycle_label} ({$latest->assessment_date->format('j M Y')}).");

@@ -133,6 +133,26 @@ class ExcelParserService
     private function extract(Worksheet $questionnaire, Collection $elements): ParsedAssessment
     {
         $column = config('ncsb.questionnaire.response_column');
+        $rawAnswers = [];
+
+        foreach ($elements as $element) {
+            foreach (range($element->first_row, $element->last_row) as $row) {
+                $cell = $questionnaire->getCell($column.$row);
+                $rawAnswers[$element->code][] = $cell->isFormula() ? $cell->getOldCalculatedValue() : $cell->getValue();
+            }
+        }
+
+        return $this->interpretAnswers($elements, $rawAnswers);
+    }
+
+    /**
+     * Apply the answer rules (D-12 – D-14, FR-13) to raw response cell values.
+     *
+     * @param  Collection<int, NcsbElement>  $elements  in questionnaire order
+     * @param  array<string, list<mixed>>  $rawAnswers  element code => cell values in question order
+     */
+    public function interpretAnswers(Collection $elements, array $rawAnswers): ParsedAssessment
+    {
         $responsesByElement = [];
         $unansweredCodes = [];
         $defaultedCellCount = 0;
@@ -145,9 +165,8 @@ class ExcelParserService
             $blanksBeforeFirstNo = 0;
             $warnedYesAfterNo = false;
 
-            foreach (range($element->first_row, $element->last_row) as $row) {
-                $cell = $questionnaire->getCell($column.$row);
-                $raw = $this->normaliseText($cell->isFormula() ? $cell->getOldCalculatedValue() : $cell->getValue());
+            foreach (range($element->first_row, $element->last_row) as $offset => $row) {
+                $raw = $this->normaliseText($rawAnswers[$element->code][$offset] ?? null);
                 $answer = $this->interpret($raw);
 
                 if ($answer === null && $raw !== '') {

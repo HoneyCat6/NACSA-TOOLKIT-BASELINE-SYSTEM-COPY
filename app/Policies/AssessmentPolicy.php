@@ -7,7 +7,7 @@ use App\Models\Assessment;
 use App\Models\User;
 
 /**
- * PRD §4.2: officers upload; officers and executives view results.
+ * PRD §4.2: officers upload and delete; officers and executives view results.
  */
 class AssessmentPolicy
 {
@@ -24,5 +24,13 @@ class AssessmentPolicy
     public function create(User $user): bool
     {
         return $user->hasRole(Role::ComplianceOfficer);
+    }
+
+    /**
+     * DECISIONS D-35: officers may undo the latest cycle only.
+     */
+    public function delete(User $user, Assessment $assessment): bool
+    {
+        return $user->hasRole(Role::ComplianceOfficer) && $assessment->isLatest();
     }
 }
