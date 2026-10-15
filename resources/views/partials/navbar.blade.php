@@ -23,6 +23,12 @@
                            href="{{ route('trends.index') }}">Trends</a>
                     </li>
                 @endcan
+                @can('viewAny', App\Models\ExecutiveReport::class)
+                    <li class="nav-item">
+                        <a class="nav-link @if (request()->routeIs('reports.*')) active @endif"
+                           href="{{ route('reports.index') }}">Reports</a>
+                    </li>
+                @endcan
                 @if (auth()->user()->hasRole(App\Enums\Role::Admin))
                     <li class="nav-item">
                         <a class="nav-link @if (request()->routeIs('admin.users.*')) active @endif"

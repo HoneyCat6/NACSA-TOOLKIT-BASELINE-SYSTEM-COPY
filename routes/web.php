@@ -8,6 +8,7 @@ use App\Http\Controllers\AssessmentController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\TrendController;
 use Illuminate\Support\Facades\Route;
 
@@ -61,10 +62,13 @@ Route::middleware(['auth', 'mfa'])->group(function () {
             Route::delete('/assessments/{assessment}', [AssessmentController::class, 'destroy'])->name('assessments.destroy');
             Route::post('/alerts/acknowledge-all', [AlertController::class, 'acknowledgeAll'])->name('alerts.acknowledge-all');
             Route::post('/alerts/{alert}/acknowledge', [AlertController::class, 'acknowledge'])->name('alerts.acknowledge');
+            Route::post('/reports/{assessment}/generate', [ReportController::class, 'generate'])->name('reports.generate');
         });
 
         Route::middleware('role:compliance_officer,executive_reviewer')->group(function () {
             Route::get('/trends', [TrendController::class, 'index'])->name('trends.index');
+            Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
+            Route::get('/reports/{report}/download', [ReportController::class, 'download'])->name('reports.download');
         });
     });
 });

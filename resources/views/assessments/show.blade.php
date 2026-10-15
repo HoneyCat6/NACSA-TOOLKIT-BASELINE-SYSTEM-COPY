@@ -15,7 +15,12 @@
                 · <span class="badge text-bg-success">Validated</span>
             </p>
         </div>
-        <a href="{{ route('assessments.index') }}" class="btn btn-outline-secondary btn-sm">All cycles</a>
+        <div class="d-flex gap-2">
+            @can('create', App\Models\ExecutiveReport::class)
+                <a href="{{ route('reports.index') }}#cycle-{{ $assessment->id }}" class="btn btn-outline-primary btn-sm">Executive report</a>
+            @endcan
+            <a href="{{ route('assessments.index') }}" class="btn btn-outline-secondary btn-sm">All cycles</a>
+        </div>
     </div>
 
     <div class="row g-3 mb-4">
@@ -214,7 +219,7 @@
                     <div>
                         <h2 class="h6 text-danger mb-1">Delete this cycle</h2>
                         <p class="small text-muted mb-0">
-                            Permanently removes {{ $assessment->cycle_label }}, its results, trend and alerts, and the stored file.
+                            Permanently removes {{ $assessment->cycle_label }}, its results, trend, alerts and executive reports, and the stored file.
                             The deletion and your reason are kept in the audit log. The same file can be uploaded again afterwards.
                         </p>
                     </div>

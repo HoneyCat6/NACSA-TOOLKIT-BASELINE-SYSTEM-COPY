@@ -7,6 +7,7 @@ use App\Enums\Role;
 use App\Models\Assessment;
 use App\Models\AuditLog;
 use App\Models\DegradationAlert;
+use App\Models\ExecutiveReport;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +28,11 @@ class DashboardController extends Controller
             ]),
             Role::ExecutiveReviewer => view('dashboard.executive', [
                 'latest' => $this->latestAssessment(),
+                'latestReport' => ExecutiveReport::query()
+                    ->with('assessment')
+                    ->orderByDesc('generated_at')
+                    ->orderByDesc('id')
+                    ->first(),
             ]),
         };
     }

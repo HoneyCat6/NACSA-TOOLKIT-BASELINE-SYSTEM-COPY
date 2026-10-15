@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Enums\Band;
+use App\Enums\ComplianceStatus;
 use App\Enums\Domain;
 use App\Enums\MaturityLevel;
 use App\Enums\RiskCategory;
@@ -73,5 +74,58 @@ class EnumTest extends TestCase
             Domain::cases(),
             fn (Domain $domain) => $domain->riskWeight() === 2,
         )));
+    }
+
+    /**
+     * DECISIONS D-58: a domain with no score is Not assessed, never Critical.
+     */
+    public function test_domain_without_a_score_is_not_assessed(): void
+    {
+        $this->assertSame(RiskCategory::NotAssessed, RiskCategory::fromDomainScore(null));
+        $this->assertSame(Severity::Unanswered, RiskCategory::NotAssessed->severity());
+    }
+
+    /**
+     * FR-31: no maturity numbers and no NCSB jargon in any narrative. The only number allowed is the Act's year.
+     */
+    public function test_narratives_contain_no_numbers_or_ncsb_jargon(): void
+    {
+        foreach (RiskCategory::cases() as $risk) {
+            foreach (Domain::cases() as $domain) {
+                $narrative = $risk->narrative($domain);
+
+                $this->assertStringContainsStringIgnoringCase($domain->areaName(), $narrative);
+                $this->assertDoesNotMatchRegularExpression('/\d/', str_replace('Cyber Security Act 2024', '', $narrative), $narrative);
+                $this->assertDoesNotMatchRegularExpression('/\b(NCSB|level|maturity|element|domain|score|threshold)\b/i', $narrative, $narrative);
+                $this->assertStringNotContainsString($domain->value, $narrative);
+            }
+        }
+    }
+
+    /**
+     * @return array<string, array{Band, list<RiskCategory>, bool, ComplianceStatus}>
+     */
+    public static function complianceCases(): array
+    {
+        $tolerable = [RiskCategory::Acceptable, RiskCategory::Moderate, RiskCategory::Acceptable, RiskCategory::Moderate, RiskCategory::Acceptable, RiskCategory::Acceptable];
+
+        return [
+            'advanced, all tolerable, all answered' => [Band::Advanced, $tolerable, false, ComplianceStatus::Compliant],
+            'advanced but an element unanswered' => [Band::Advanced, $tolerable, true, ComplianceStatus::PartiallyCompliant],
+            'advanced with a high-risk domain' => [Band::Advanced, [RiskCategory::High, ...array_slice($tolerable, 1)], false, ComplianceStatus::PartiallyCompliant],
+            'advanced with a domain not assessed' => [Band::Advanced, [RiskCategory::NotAssessed, ...array_slice($tolerable, 1)], true, ComplianceStatus::PartiallyCompliant],
+            'intermediate, all tolerable' => [Band::Intermediate, $tolerable, false, ComplianceStatus::PartiallyCompliant],
+            'any critical domain' => [Band::Advanced, [RiskCategory::Critical, ...array_slice($tolerable, 1)], false, ComplianceStatus::NonCompliant],
+            'initial band' => [Band::Initial, $tolerable, false, ComplianceStatus::NonCompliant],
+        ];
+    }
+
+    /**
+     * @param  list<RiskCategory>  $risks
+     */
+    #[DataProvider('complianceCases')]
+    public function test_cyber_security_act_status_follows_decision_d50(Band $band, array $risks, bool $hasUnanswered, ComplianceStatus $expected): void
+    {
+        $this->assertSame($expected, ComplianceStatus::determine($band, $risks, $hasUnanswered));
     }
 }

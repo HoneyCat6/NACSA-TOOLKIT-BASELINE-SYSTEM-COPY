@@ -53,6 +53,21 @@ enum Domain: string
     }
 
     /**
+     * Plain-language name used in the executive report instead of NCSB terms (FR-31, DECISIONS D-57).
+     */
+    public function areaName(): string
+    {
+        return match ($this) {
+            self::Govern => 'Cybersecurity governance',
+            self::Identify => 'Asset and risk identification',
+            self::Protect => 'Protective security',
+            self::Detect => 'Threat detection',
+            self::Respond => 'Incident response',
+            self::Recover => 'Recovery and continuity',
+        };
+    }
+
+    /**
      * Column on `assessments` holding this domain's 0–3 score.
      */
     public function scoreColumn(): string
