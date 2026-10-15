@@ -29,6 +29,14 @@ class AssessmentPolicy
         return $user->hasRole(Role::ComplianceOfficer, Role::ExecutiveReviewer);
     }
 
+    /**
+     * FR-50 – FR-54: the control effectiveness heatmap is for officers and executives.
+     */
+    public function viewHeatmap(User $user): bool
+    {
+        return $user->hasRole(Role::ComplianceOfficer, Role::ExecutiveReviewer);
+    }
+
     public function create(User $user): bool
     {
         return $user->hasRole(Role::ComplianceOfficer);

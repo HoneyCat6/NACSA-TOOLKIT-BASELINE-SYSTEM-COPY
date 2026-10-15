@@ -23,6 +23,12 @@
                            href="{{ route('trends.index') }}">Trends</a>
                     </li>
                 @endcan
+                @can('viewHeatmap', App\Models\Assessment::class)
+                    <li class="nav-item">
+                        <a class="nav-link @if (request()->routeIs('heatmap.index')) active @endif"
+                           href="{{ route('heatmap.index') }}">Heatmap</a>
+                    </li>
+                @endcan
                 @can('viewAny', App\Models\ExecutiveReport::class)
                     <li class="nav-item">
                         <a class="nav-link @if (request()->routeIs('reports.*')) active @endif"
