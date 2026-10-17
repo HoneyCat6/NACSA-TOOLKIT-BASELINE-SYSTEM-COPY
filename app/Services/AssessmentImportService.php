@@ -26,6 +26,7 @@ class AssessmentImportService
         private ExcelParserService $parser,
         private ScoringService $scoring,
         private TrendService $trends,
+        private DeadlineService $deadlines,
         private AuditService $audit,
     ) {}
 
@@ -67,6 +68,8 @@ class AssessmentImportService
                     'overall_band' => $assessment->overall_band->value,
                 ], $uploader);
 
+                $this->deadlines->markMetByUpload($assessment, $uploader);
+
                 return $assessment;
             });
         } catch (Throwable $exception) {
@@ -78,6 +81,7 @@ class AssessmentImportService
 
     /**
      * D-35: permanently delete an uploaded cycle — its elements, trend, alerts, executive reports and stored files.
+     * Deadlines its upload met are reopened (D-46).
      *
      * Only ever called for the latest cycle, so no other cycle's trend points at it.
      */
@@ -86,6 +90,8 @@ class AssessmentImportService
         $reportPaths = $assessment->reports()->pluck('file_path')->all();
 
         DB::transaction(function () use ($assessment, $reason, $user, $reportPaths): void {
+            $deadlinesReopened = $this->deadlines->reopenMetBy($assessment, $user);
+
             $this->audit->log('assessment.deleted', AuditCategory::Compliance, $assessment, [
                 'cycle_label' => $assessment->cycle_label,
                 'assessment_date' => $assessment->assessment_date->toDateString(),
@@ -93,6 +99,7 @@ class AssessmentImportService
                 'overall_score' => $assessment->overall_score,
                 'overall_band' => $assessment->overall_band->value,
                 'reports_deleted' => count($reportPaths),
+                'deadlines_reopened' => $deadlinesReopened,
                 'reason' => $reason,
             ], $user);
 

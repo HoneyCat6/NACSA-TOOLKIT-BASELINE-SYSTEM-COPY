@@ -71,6 +71,16 @@ class Assessment extends Model
     }
 
     /**
+     * Compliance deadlines this upload met (DECISIONS D-40).
+     *
+     * @return HasMany<ComplianceDeadline, $this>
+     */
+    public function metDeadlines(): HasMany
+    {
+        return $this->hasMany(ComplianceDeadline::class, 'met_by_assessment_id');
+    }
+
+    /**
      * The cycle immediately before this one.
      */
     public function previous(): ?self

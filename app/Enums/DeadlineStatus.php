@@ -20,6 +20,19 @@ enum DeadlineStatus: string
     }
 
     /**
+     * Bootstrap badge class for the status pill; the label is always shown with it.
+     */
+    public function badgeClass(): string
+    {
+        return match ($this) {
+            self::Upcoming => 'text-bg-secondary',
+            self::DueSoon => 'text-bg-warning',
+            self::Overdue => 'text-bg-danger',
+            self::Met => 'text-bg-success',
+        };
+    }
+
+    /**
      * @return list<string>
      */
     public static function values(): array

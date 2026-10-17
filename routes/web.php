@@ -5,9 +5,13 @@ use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\AlertController;
 use App\Http\Controllers\AssessmentController;
+use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DeadlineAcknowledgementController;
+use App\Http\Controllers\DeadlineController;
 use App\Http\Controllers\HeatmapController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\TrendController;
@@ -28,6 +32,10 @@ Route::middleware('guest')->group(function () {
     Route::get('/reset-password/{token}', [PasswordResetController::class, 'showReset'])->name('password.reset');
     Route::post('/reset-password', [PasswordResetController::class, 'reset'])->name('password.update');
 });
+
+// FR-43: the reminder email's acknowledgement link works without signing in; the controller checks the signature (D-45).
+Route::get('/deadlines/{deadline}/acknowledge/{user}', [DeadlineAcknowledgementController::class, 'show'])->name('deadlines.acknowledge-link');
+Route::post('/deadlines/{deadline}/acknowledge/{user}', [DeadlineAcknowledgementController::class, 'store'])->middleware('throttle:10,1');
 
 Route::middleware(['auth', 'mfa'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
@@ -64,6 +72,17 @@ Route::middleware(['auth', 'mfa'])->group(function () {
             Route::post('/alerts/acknowledge-all', [AlertController::class, 'acknowledgeAll'])->name('alerts.acknowledge-all');
             Route::post('/alerts/{alert}/acknowledge', [AlertController::class, 'acknowledge'])->name('alerts.acknowledge');
             Route::post('/reports/{assessment}/generate', [ReportController::class, 'generate'])->name('reports.generate');
+
+            Route::get('/deadlines', [DeadlineController::class, 'index'])->name('deadlines.index');
+            Route::get('/deadlines/create', [DeadlineController::class, 'create'])->name('deadlines.create');
+            Route::post('/deadlines', [DeadlineController::class, 'store'])->name('deadlines.store');
+            Route::get('/deadlines/{deadline}/edit', [DeadlineController::class, 'edit'])->name('deadlines.edit');
+            Route::patch('/deadlines/{deadline}', [DeadlineController::class, 'update'])->name('deadlines.update');
+            Route::delete('/deadlines/{deadline}', [DeadlineController::class, 'destroy'])->name('deadlines.destroy');
+            Route::post('/deadlines/{deadline}/acknowledge', [DeadlineController::class, 'acknowledge'])->name('deadlines.acknowledge');
+            Route::post('/deadlines/{deadline}/met', [DeadlineController::class, 'markMet'])->name('deadlines.met');
+            Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+            Route::get('/audit-trail', [AuditTrailController::class, 'index'])->name('audit-trail.index');
         });
 
         Route::middleware('role:compliance_officer,executive_reviewer')->group(function () {

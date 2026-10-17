@@ -6,6 +6,8 @@ use App\Enums\AuditCategory;
 use App\Enums\Role;
 use App\Models\Assessment;
 use App\Models\AuditLog;
+use App\Models\ComplianceDeadline;
+use App\Models\DeadlineNotification;
 use App\Models\DegradationAlert;
 use App\Models\ExecutiveReport;
 use App\Models\User;
@@ -25,6 +27,8 @@ class DashboardController extends Controller
             Role::ComplianceOfficer => view('dashboard.officer', [
                 'latest' => $this->latestAssessment(),
                 'activeAlertCount' => DegradationAlert::query()->active()->count(),
+                'overdueDeadlineCount' => ComplianceDeadline::query()->open()->whereDate('due_date', '<', today())->count(),
+                'failedNotificationCount' => DeadlineNotification::query()->failed()->count(),
             ]),
             Role::ExecutiveReviewer => view('dashboard.executive', [
                 'latest' => $this->latestAssessment(),

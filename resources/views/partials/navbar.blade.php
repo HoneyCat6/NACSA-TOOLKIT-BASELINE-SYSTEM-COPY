@@ -35,6 +35,16 @@
                            href="{{ route('reports.index') }}">Reports</a>
                     </li>
                 @endcan
+                @can('viewAny', App\Models\ComplianceDeadline::class)
+                    <li class="nav-item">
+                        <a class="nav-link @if (request()->routeIs('deadlines.*', 'notifications.*')) active @endif"
+                           href="{{ route('deadlines.index') }}">Deadlines</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link @if (request()->routeIs('audit-trail.*')) active @endif"
+                           href="{{ route('audit-trail.index') }}">Audit trail</a>
+                    </li>
+                @endcan
                 @if (auth()->user()->hasRole(App\Enums\Role::Admin))
                     <li class="nav-item">
                         <a class="nav-link @if (request()->routeIs('admin.users.*')) active @endif"
