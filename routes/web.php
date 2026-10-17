@@ -14,6 +14,7 @@ use App\Http\Controllers\HeatmapController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\SimulatorController;
 use App\Http\Controllers\TrendController;
 use Illuminate\Support\Facades\Route;
 
@@ -89,6 +90,11 @@ Route::middleware(['auth', 'mfa'])->group(function () {
             Route::get('/trends', [TrendController::class, 'index'])->name('trends.index');
             Route::get('/heatmap', [HeatmapController::class, 'index'])->name('heatmap.index');
             Route::get('/heatmap/element/{code}', [HeatmapController::class, 'detail'])->name('heatmap.detail');
+            Route::get('/simulator', [SimulatorController::class, 'index'])->name('simulator.index');
+            Route::post('/simulator/project', [SimulatorController::class, 'project'])->name('simulator.project');
+            Route::post('/simulator/sessions', [SimulatorController::class, 'store'])->name('simulator.sessions.store');
+            Route::get('/simulator/sessions/{session}', [SimulatorController::class, 'show'])->name('simulator.sessions.show');
+            Route::delete('/simulator/sessions/{session}', [SimulatorController::class, 'destroy'])->name('simulator.sessions.destroy');
             Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
             Route::get('/reports/{report}/download', [ReportController::class, 'download'])->name('reports.download');
         });

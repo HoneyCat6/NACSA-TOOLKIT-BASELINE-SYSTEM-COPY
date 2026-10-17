@@ -42,6 +42,9 @@ These decisions resolve gaps and contradictions found while reviewing the PRD an
 | D-21 | **Simulator "implemented" rule:** for an element whose slider is untouched, keep the baseline status (≥ 1 Yes). For an element the user has moved, implemented = level ≥ 1. With no changes, the projection equals the baseline exactly. | PRD §7.7 |
 | D-22 | **Unanswered elements in the simulator** are left out of domain averages (as in scoring) until the user moves their slider. | TS §7.5 (`?? 0`) |
 | D-23 | **Live projection runs in the browser** (same algorithm in JS). `POST /simulator/project` stays as the authoritative server calculation, used when saving and in tests. Meets FR-62's 300 ms budget. | TS §13.2 |
+| D-24 | **A slider moved back to its baseline level is no longer a change.** Only elements that differ from the baseline are kept as overrides and saved in `modified_responses`, so D-21's "untouched" status comes back (an element at Level 0 with one "Yes" stays implemented). An Unanswered element keeps any level the user gives it, including 0, until it is reset. Unknown element codes are rejected, and levels must be 0–3. Saving needs at least one change. *Added 18 Oct 2026.* | D-21, TS §7.5 |
+| D-25 | **Saved scenarios are private to their author.** Officers and executives see, reload and delete only the scenarios they saved. Opening someone else's scenario returns 403. *Added 18 Oct 2026.* | FR-64 |
+| D-26 | **Scenarios are saved as new records and can be deleted by their author.** There is no editing in place: to change a scenario, reload it, adjust it and save it under a name. Saves and deletions are audited (`simulation.save`, `simulation.deleted`, compliance category). Deleting a baseline cycle (D-35) also deletes the scenarios built on it. *Added 18 Oct 2026.* | FR-64, FR-06 |
 
 ## 4. Assessments
 

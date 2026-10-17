@@ -14,11 +14,25 @@ enum Band: string
      */
     public static function fromScore(float $score): self
     {
-        return match (true) {
-            $score >= 0.75 => self::Advanced,
-            $score >= 0.50 => self::Intermediate,
-            $score >= 0.25 => self::Basic,
-            default => self::Initial,
+        foreach (array_reverse(self::cases()) as $band) {
+            if ($score >= $band->minimumScore()) {
+                return $band;
+            }
+        }
+
+        return self::Initial;
+    }
+
+    /**
+     * Lowest overall score in this band — also handed to the simulator's in-browser projection (DECISIONS D-23).
+     */
+    public function minimumScore(): float
+    {
+        return match ($this) {
+            self::Initial => 0.0,
+            self::Basic => 0.25,
+            self::Intermediate => 0.50,
+            self::Advanced => 0.75,
         };
     }
 

@@ -17,12 +17,30 @@ enum RiskCategory: string
      */
     public static function fromDomainScore(?float $score): self
     {
-        return match (true) {
-            $score === null => self::NotAssessed,
-            $score >= 2.50 => self::Acceptable,
-            $score >= 1.75 => self::Moderate,
-            $score >= 1.00 => self::High,
-            default => self::Critical,
+        if ($score === null) {
+            return self::NotAssessed;
+        }
+
+        foreach ([self::Acceptable, self::Moderate, self::High] as $category) {
+            if ($score >= $category->minimumScore()) {
+                return $category;
+            }
+        }
+
+        return self::Critical;
+    }
+
+    /**
+     * Lowest domain score in this category; null for Not assessed. Also handed to the simulator (DECISIONS D-23).
+     */
+    public function minimumScore(): ?float
+    {
+        return match ($this) {
+            self::Critical => 0.0,
+            self::High => 1.00,
+            self::Moderate => 1.75,
+            self::Acceptable => 2.50,
+            self::NotAssessed => null,
         };
     }
 

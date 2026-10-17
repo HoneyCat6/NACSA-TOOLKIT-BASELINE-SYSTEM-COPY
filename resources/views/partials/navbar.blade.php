@@ -29,6 +29,12 @@
                            href="{{ route('heatmap.index') }}">Heatmap</a>
                     </li>
                 @endcan
+                @can('viewAny', App\Models\SimulationSession::class)
+                    <li class="nav-item">
+                        <a class="nav-link @if (request()->routeIs('simulator.*')) active @endif"
+                           href="{{ route('simulator.index') }}">Simulator</a>
+                    </li>
+                @endcan
                 @can('viewAny', App\Models\ExecutiveReport::class)
                     <li class="nav-item">
                         <a class="nav-link @if (request()->routeIs('reports.*')) active @endif"
