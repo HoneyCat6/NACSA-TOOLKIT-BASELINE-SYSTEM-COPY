@@ -20,7 +20,10 @@ class HeatmapService
     /**
      * The 33 elements grouped under their six domains in questionnaire order (FR-50).
      *
-     * @return array<string, array{domain: Domain, cells: list<array{code: string, name: string, level: ?int, severity: Severity, label: string}>}>
+     * Each group also carries its control count and the mean level of its answered controls
+     * (null when none are answered) for the function summary line — computed here, not in Blade.
+     *
+     * @return array<string, array{domain: Domain, count: int, average: ?float, cells: list<array{code: string, name: string, level: ?int, severity: Severity, label: string}>}>
      */
     public function grid(Assessment $cycle): array
     {
@@ -40,7 +43,14 @@ class HeatmapService
                 ->values()
                 ->all();
 
-            $grid[$domain->value] = ['domain' => $domain, 'cells' => $cells];
+            $answered = collect($cells)->pluck('level')->reject(fn (?int $level): bool => $level === null);
+
+            $grid[$domain->value] = [
+                'domain' => $domain,
+                'count' => count($cells),
+                'average' => $answered->isEmpty() ? null : round($answered->avg(), 2),
+                'cells' => $cells,
+            ];
         }
 
         return $grid;

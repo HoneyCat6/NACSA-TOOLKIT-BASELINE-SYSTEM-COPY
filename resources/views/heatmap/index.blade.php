@@ -2,6 +2,44 @@
 
 @section('title', 'Control effectiveness heatmap')
 
+@push('styles')
+    <style>
+        /* Layout only — colours come from the Severity enum (one source, shared with the legend). */
+        .heatmap-function { padding: 12px; }
+        .heatmap-function + .heatmap-function { border-top: 1px solid var(--bs-border-color); }
+        .heatmap-function-inner { display: flex; align-items: flex-start; gap: 1rem; }
+        .heatmap-summary { flex: 0 0 190px; }
+        .heatmap-fn-name { font-size: 18px; font-weight: 700; line-height: 1.2; }
+        .heatmap-fn-desc { font-size: 13px; color: var(--bs-secondary-color); }
+        .heatmap-fn-stat { font-size: 13px; margin-top: 0.25rem; }
+        .heatmap-grid {
+            flex: 1 1 auto;
+            display: grid;
+            grid-template-columns: repeat(8, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .heatmap-cell {
+            height: 64px;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 6px;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            text-align: left;
+            width: 100%;
+            cursor: pointer;
+        }
+        .heatmap-cell-id { font-size: 12px; font-weight: 600; }
+        .heatmap-cell-score { font-size: 22px; font-weight: 700; line-height: 1; }
+        @media (max-width: 767.98px) {
+            .heatmap-function-inner { flex-direction: column; }
+            .heatmap-summary { flex: 0 0 auto; }
+            .heatmap-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        }
+    </style>
+@endpush
+
 @section('content')
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
         <div>
@@ -85,25 +123,36 @@
              }"
              @keydown.escape.window="close()">
 
-            @foreach ($grid as $group)
-                <section class="mb-4">
-                    <h2 class="h6 mb-1">{{ $group['domain']->label() }}
-                        <span class="text-muted fw-normal small">· {{ $group['domain']->areaName() }}</span>
-                    </h2>
-                    <div class="d-flex flex-nowrap gap-2 overflow-auto pb-2">
-                        @foreach ($group['cells'] as $cell)
-                            <button type="button"
-                                    class="btn border p-2 flex-shrink-0 text-start"
-                                    style="width:84px;height:68px;background:{{ $cell['severity']->colour() }};color:{{ $cell['severity']->textColour() }};"
-                                    @click="show('{{ $cell['code'] }}')"
-                                    aria-label="{{ $cell['code'] }} {{ $cell['name'] }} — {{ $cell['label'] }}, level {{ $cell['level'] ?? 'unanswered' }}">
-                                <span class="d-block fw-semibold small">{{ $cell['code'] }}</span>
-                                <span class="d-block fs-4 lh-1">{{ $cell['level'] ?? '—' }}</span>
-                            </button>
-                        @endforeach
+            <div class="card shadow-sm">
+                @foreach ($grid as $group)
+                    <div class="heatmap-function">
+                        <div class="heatmap-function-inner">
+                            <div class="heatmap-summary">
+                                <div class="heatmap-fn-name">{{ $group['domain']->label() }}</div>
+                                <div class="heatmap-fn-desc">{{ $group['domain']->areaName() }}</div>
+                                <div class="heatmap-fn-stat text-muted">
+                                    <strong>{{ $group['count'] }}</strong> controls ·
+                                    avg <strong>{{ $group['average'] === null ? '–' : number_format($group['average'], 2) }}</strong>
+                                </div>
+                            </div>
+                            <div class="heatmap-grid">
+                                @foreach ($group['cells'] as $cell)
+                                    @php($maturity = $cell['level'] ?? 'unanswered')
+                                    <button type="button"
+                                            class="heatmap-cell"
+                                            style="background:{{ $cell['severity']->colour() }};color:{{ $cell['severity']->textColour() }};"
+                                            @click="show('{{ $cell['code'] }}')"
+                                            title="{{ $cell['code'] }} — {{ $cell['name'] }} · maturity {{ $maturity }} · {{ $cell['label'] }}"
+                                            aria-label="{{ $cell['code'] }}, maturity {{ $maturity }}, {{ $cell['label'] }}">
+                                        <span class="heatmap-cell-id">{{ $cell['code'] }}</span>
+                                        <span class="heatmap-cell-score">{{ $cell['level'] ?? '–' }}</span>
+                                    </button>
+                                @endforeach
+                            </div>
+                        </div>
                     </div>
-                </section>
-            @endforeach
+                @endforeach
+            </div>
 
             {{-- Drill-down panel (FR-51). --}}
             <div x-show="open" x-cloak class="offcanvas-backdrop fade show" style="z-index:1040" @click="close()"></div>
