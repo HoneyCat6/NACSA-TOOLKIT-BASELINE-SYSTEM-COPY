@@ -10,13 +10,7 @@
             </div>
 
             <div @class(['fs-5 fw-semibold', 'text-danger' => $daysRemaining < 0])>
-                @if ($daysRemaining < 0)
-                    {{ -$daysRemaining }} {{ Str::plural('day', -$daysRemaining) }} overdue
-                @elseif ($daysRemaining === 0)
-                    Due today
-                @else
-                    {{ $daysRemaining }} {{ Str::plural('day', $daysRemaining) }} left
-                @endif
+                @include('deadlines.partials.days-remaining')
             </div>
             <div class="small text-muted mb-2">Due {{ $deadline->due_date->format('l, j M Y') }}</div>
 

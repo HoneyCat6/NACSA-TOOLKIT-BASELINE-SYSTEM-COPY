@@ -8,6 +8,13 @@
         <a href="{{ route('admin.users.create') }}" class="btn btn-primary">Add user</a>
     </div>
 
+    @unless ($hasActiveOfficer)
+        <div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2" role="alert">
+            <span><strong>Getting started:</strong> no Compliance Officer account is active yet. Officers upload the self-assessments that every dashboard reports on.</span>
+            <a href="{{ route('admin.users.create') }}" class="btn btn-sm btn-primary">Add a Compliance Officer</a>
+        </div>
+    @endunless
+
     <h2 class="h5">Registered users</h2>
     <div class="row g-3 mb-4">
         @foreach ($roleCounts as $count)
@@ -25,7 +32,22 @@
 
     <h2 class="h5">System health</h2>
     <div class="row g-3 mb-4">
-        <div class="col-md-6 col-xl-3">
+        <div class="col-md-6 col-xl">
+            <div class="card shadow-sm h-100 @unless ($schedulerRunning) border-danger @endunless">
+                <div class="card-body">
+                    <div class="small text-muted mb-1">Scheduler</div>
+                    <div class="fs-4 fw-semibold @unless ($schedulerRunning) text-danger @endunless">{{ $schedulerRunning ? 'Running' : 'Not running' }}</div>
+                    <div class="small text-muted">
+                        @if ($lastSchedulerRun)
+                            Last run {{ $lastSchedulerRun->format('j M Y, H:i') }} ({{ $lastSchedulerRun->diffForHumans() }})
+                        @else
+                            No run recorded. Start <code>php artisan schedule:work</code>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-xl">
             <div class="card shadow-sm h-100">
                 <div class="card-body">
                     <div class="small text-muted mb-1">Queued jobs</div>
@@ -34,7 +56,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-6 col-xl-3">
+        <div class="col-md-6 col-xl">
             <div class="card shadow-sm h-100 @if ($failedJobs > 0) border-danger @endif">
                 <div class="card-body">
                     <div class="small text-muted mb-1">Failed jobs</div>
@@ -43,7 +65,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-6 col-xl-3">
+        <div class="col-md-6 col-xl">
             <div class="card shadow-sm h-100">
                 <div class="card-body">
                     <div class="small text-muted mb-1">Failed sign-ins · last 24 h</div>
@@ -52,7 +74,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-6 col-xl-3">
+        <div class="col-md-6 col-xl">
             <div class="card shadow-sm h-100">
                 <div class="card-body">
                     <div class="small text-muted mb-1">Mail driver</div>
