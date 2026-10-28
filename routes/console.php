@@ -3,6 +3,7 @@
 use App\Jobs\DispatchDeadlineRemindersJob;
 use App\Jobs\EscalateOverdueDeadlinesJob;
 use App\Services\DeadlineService;
+use App\Services\SystemHealthService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
@@ -22,6 +23,13 @@ Schedule::job(new EscalateOverdueDeadlinesJob)->dailyAt('08:15')
     ->name('deadline-escalations')->withoutOverlapping();
 
 Schedule::command('deadlines:refresh-status')->hourly();
+
+/*
+ * FR-70 "last scheduler run": proves `schedule:work` / Task Scheduler is alive, shown on the Admin dashboard (D-60).
+ */
+Schedule::call(fn (SystemHealthService $health) => $health->recordSchedulerHeartbeat())
+    ->everyMinute()
+    ->name('scheduler-heartbeat');
 
 Artisan::command('deadlines:refresh-status', function (DeadlineService $deadlines) {
     $this->info($deadlines->refreshStatuses().' deadline status(es) updated.');

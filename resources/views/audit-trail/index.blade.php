@@ -4,7 +4,7 @@
 
 @section('content')
     <h1 class="h3 mb-1">Compliance audit trail</h1>
-    <p class="text-muted small mb-3">Assessment uploads, rejections and deletions, executive reports, alert acknowledgements and deadline changes.</p>
+    <p class="text-muted small mb-3">Assessment uploads, rejections and deletions, executive reports, alert acknowledgements, deadline changes and saved simulator scenarios.</p>
 
     @include('admin.audit-logs.partials.filters', ['formAction' => route('audit-trail.index')])
 
