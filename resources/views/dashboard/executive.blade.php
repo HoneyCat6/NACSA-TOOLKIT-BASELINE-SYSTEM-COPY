@@ -85,6 +85,8 @@
             </div>
         </div>
 
+        @include('dashboard.partials.forecast', ['forecast' => $forecast])
+
         <div class="card shadow-sm">
             <div class="card-header bg-white">
                 <h2 class="h5 mb-0">Risk by area</h2>

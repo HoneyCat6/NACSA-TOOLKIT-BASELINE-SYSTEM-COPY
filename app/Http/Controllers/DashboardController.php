@@ -15,6 +15,7 @@ use App\Models\DeadlineNotification;
 use App\Models\DegradationAlert;
 use App\Models\ExecutiveReport;
 use App\Models\User;
+use App\Services\ForecastService;
 use App\Services\ReportService;
 use App\Services\SystemHealthService;
 use App\Services\TrendService;
@@ -37,12 +38,12 @@ class DashboardController extends Controller
     /**
      * Dispatch to the dashboard for the user's role (FR-70 – FR-73).
      */
-    public function index(Request $request, SystemHealthService $health, TrendService $trends, ReportService $reports): View
+    public function index(Request $request, SystemHealthService $health, TrendService $trends, ReportService $reports, ForecastService $forecasts): View
     {
         return match ($request->user()->role) {
             Role::Admin => view('dashboard.admin', $this->adminData($health)),
             Role::ComplianceOfficer => view('dashboard.officer', $this->officerData($trends)),
-            Role::ExecutiveReviewer => view('dashboard.executive', $this->executiveData($reports)),
+            Role::ExecutiveReviewer => view('dashboard.executive', $this->executiveData($reports, $forecasts)),
         };
     }
 
@@ -128,14 +129,16 @@ class DashboardController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function executiveData(ReportService $reports): array
+    private function executiveData(ReportService $reports, ForecastService $forecasts): array
     {
-        $latest = Assessment::query()->with('trend')->newestFirst()->first();
+        $assessments = Assessment::query()->with('trend')->newestFirst()->limit(ForecastService::AssessmentCount)->get()->reverse()->values();
+        $latest = $assessments->last();
         $riskProfile = $latest === null ? [] : $reports->riskProfile($latest);
 
         return [
             'latest' => $latest,
             'riskProfile' => $riskProfile,
+            'forecast' => $forecasts->outlook($assessments),
             'complianceStatus' => $latest === null ? null : ComplianceStatus::determine(
                 $latest->overall_band,
                 array_map(fn (array $domain): RiskCategory => RiskCategory::from($domain['risk']), $riskProfile),
