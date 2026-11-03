@@ -3,3 +3,13 @@
 [x-cloak] {
     display: none !important;
 }
+
+.forecast-chart-scroll {
+    overflow-x: auto;
+}
+
+.forecast-chart-container {
+    position: relative;
+    min-width: 640px;
+    height: 540px;
+}
