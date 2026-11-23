@@ -45,8 +45,13 @@ class AssessmentElement extends Model
         return $this->belongsTo(NcsbElement::class);
     }
 
+    public function isDisabled(): bool
+    {
+        return $this->status === ElementStatus::Disabled;
+    }
+
     /**
-     * Unanswered elements render neutral grey, never as Critical (FR-52).
+     * Elements without a maturity level render neutral grey (FR-52).
      */
     public function severity(): Severity
     {

@@ -8,13 +8,18 @@ enum Band: string
     case Basic = 'Basic';
     case Intermediate = 'Intermediate';
     case Advanced = 'Advanced';
+    case NotApplicable = 'N/A';
 
     /**
      * Map an overall score (0.00–1.00) to a band (PRD §7.1, toolkit Scoring Dashboard K2).
      */
-    public static function fromScore(float $score): self
+    public static function fromScore(?float $score): self
     {
-        foreach (array_reverse(self::cases()) as $band) {
+        if ($score === null) {
+            return self::NotApplicable;
+        }
+
+        foreach (array_reverse(self::scoredBands()) as $band) {
             if ($score >= $band->minimumScore()) {
                 return $band;
             }
@@ -29,7 +34,7 @@ enum Band: string
     public function minimumScore(): float
     {
         return match ($this) {
-            self::Initial => 0.0,
+            self::Initial, self::NotApplicable => 0.0,
             self::Basic => 0.25,
             self::Intermediate => 0.50,
             self::Advanced => 0.75,
@@ -43,10 +48,17 @@ enum Band: string
     {
         return match ($this) {
             self::Initial => Severity::Critical,
+            self::NotApplicable => Severity::Unanswered,
             self::Basic => Severity::High,
             self::Intermediate => Severity::Low,
             self::Advanced => Severity::Compliant,
         };
+    }
+
+    /** @return list<self> */
+    public static function scoredBands(): array
+    {
+        return [self::Initial, self::Basic, self::Intermediate, self::Advanced];
     }
 
     /**
@@ -54,6 +66,6 @@ enum Band: string
      */
     public static function values(): array
     {
-        return array_column(self::cases(), 'value');
+        return array_column(self::scoredBands(), 'value');
     }
 }

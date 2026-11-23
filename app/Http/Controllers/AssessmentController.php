@@ -9,7 +9,9 @@ use App\Http\Requests\UploadAssessmentRequest;
 use App\Models\Assessment;
 use App\Models\AssessmentElement;
 use App\Models\AuditLog;
+use App\Models\Sector;
 use App\Services\AssessmentImportService;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
@@ -25,7 +27,7 @@ class AssessmentController extends Controller
 
         return view('assessments.index', [
             'assessments' => Assessment::query()
-                ->with('creator')
+                ->with(['creator', 'sector'])
                 ->newestFirst()
                 ->get(),
         ]);
@@ -36,8 +38,9 @@ class AssessmentController extends Controller
         Gate::authorize('create', Assessment::class);
 
         return view('assessments.upload', [
+            'sectors' => Sector::query()->with(['constructs' => fn (HasMany $query) => $query->orderBy('code')])->orderBy('name')->get(),
             'recentAssessments' => Assessment::query()
-                ->with('creator')
+                ->with(['creator', 'sector'])
                 ->newestFirst()
                 ->limit(5)
                 ->get(),
@@ -59,10 +62,12 @@ class AssessmentController extends Controller
                 $request->string('cycle_label')->trim()->toString(),
                 $request->date('assessment_date'),
                 $request->user(),
+                $request->filled('sector_id') ? $request->integer('sector_id') : null,
+                $request->validated('sector_levels', []),
             );
         } catch (TemplateValidationException $exception) {
             return back()
-                ->withInput($request->safe()->only(['cycle_label', 'assessment_date']))
+                ->withInput($request->safe()->only(['cycle_label', 'assessment_date', 'sector_id', 'sector_levels']))
                 ->withErrors(['file' => $exception->getMessage()]);
         }
 
@@ -84,7 +89,7 @@ class AssessmentController extends Controller
     {
         Gate::authorize('view', $assessment);
 
-        $assessment->load(['creator', 'elements.ncsbElement', 'trend.previousAssessment', 'trend.alerts.ncsbElement']);
+        $assessment->load(['creator', 'sector', 'sectorConstructScores.sectorConstruct', 'elements.ncsbElement', 'trend.previousAssessment', 'trend.alerts.ncsbElement']);
 
         $elements = $assessment->elements
             ->sortBy(fn (AssessmentElement $element): int => $element->ncsbElement->sort_order)
@@ -93,6 +98,7 @@ class AssessmentController extends Controller
         return view('assessments.show', [
             'assessment' => $assessment,
             'elements' => $elements,
+            'applicableCount' => $assessment->sector_id === null ? config('ncsb.element_count') : $elements->reject->isDisabled()->count(),
             'unansweredElements' => $elements->filter(fn (AssessmentElement $element): bool => $element->status === ElementStatus::Unanswered),
         ]);
     }

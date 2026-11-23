@@ -30,6 +30,9 @@ class UploadAssessmentRequest extends FormRequest
             'file' => ['required', 'file', 'extensions:xlsx', 'mimes:xlsx', 'max:'.config('ncsb.max_upload_kb')],
             'cycle_label' => ['required', 'string', 'max:50', Rule::unique('assessments', 'cycle_label')],
             'assessment_date' => ['required', 'date', 'before_or_equal:today'],
+            'sector_id' => ['nullable', 'integer', 'exists:sectors,id'],
+            'sector_levels' => ['sometimes', 'array'],
+            'sector_levels.*' => ['nullable', 'integer', 'between:0,3'],
         ];
     }
 
@@ -54,11 +57,12 @@ class UploadAssessmentRequest extends FormRequest
     {
         return [
             function (Validator $validator): void {
-                if ($validator->errors()->has('assessment_date')) {
+                if ($validator->errors()->hasAny(['assessment_date', 'sector_id'])) {
                     return;
                 }
 
-                $latest = Assessment::query()->newestFirst()->first();
+                $sectorId = $this->filled('sector_id') ? $this->integer('sector_id') : null;
+                $latest = Assessment::query()->where('sector_id', $sectorId)->newestFirst()->first();
 
                 if ($latest !== null && $this->date('assessment_date')->lte($latest->assessment_date)) {
                     $validator->errors()->add('assessment_date', "The assessment date must be later than the latest cycle, {$latest->cycle_label} ({$latest->assessment_date->format('j M Y')}).");

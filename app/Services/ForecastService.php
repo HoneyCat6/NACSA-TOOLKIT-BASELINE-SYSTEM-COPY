@@ -43,6 +43,14 @@ class ForecastService
             return [...$result, 'unavailable' => 'At least three assessment cycles are needed to estimate the next assessment.'];
         }
 
+        if ($latest->sector_id !== null) {
+            $disabledCodes = $latest->disabledCoreCodes();
+
+            if ($assessments->contains(fn (Assessment $assessment): bool => $assessment->disabledCoreCodes() !== $disabledCodes)) {
+                return [...$result, 'unavailable' => 'The latest three assessments need the same applicable core constructs.'];
+            }
+        }
+
         if ($assessments->contains(fn (Assessment $assessment): bool => $assessment->unanswered_count > 0
             || $assessment->defaulted_cell_count > 0 || ! empty($assessment->parse_warnings))) {
             return [...$result, 'unavailable' => 'The latest three assessments include unanswered or flagged responses. Three complete assessments without response warnings are needed for a comparable forecast.'];

@@ -13,7 +13,7 @@
             <div class="card shadow-sm">
                 <div class="card-body">
                     <form method="POST" action="{{ route('assessments.store') }}" enctype="multipart/form-data" novalidate
-                          x-data="assessmentUpload({{ config('ncsb.max_upload_kb') }})" @submit="submitting = true">
+                          x-data="assessmentUpload({{ config('ncsb.max_upload_kb') }}, @js(is_scalar(old('sector_id')) ? (string) old('sector_id') : ''))" @submit="submitting = true">
                         @csrf
 
                         <label for="file"
@@ -53,6 +53,54 @@
                                 @enderror
                             </div>
                         </div>
+
+                        @if ($sectors->isNotEmpty())
+                            <div class="mb-3">
+                                <label for="sector_id" class="form-label">Sector</label>
+                                <select id="sector_id" name="sector_id" class="form-select @error('sector_id') is-invalid @enderror" x-model="sectorId">
+                                    <option value="">Standard NCSB baseline</option>
+                                    @foreach ($sectors as $sector)
+                                        <option value="{{ $sector->id }}" @selected((string) $sector->id === old('sector_id'))>{{ $sector->name }}</option>
+                                    @endforeach
+                                </select>
+                                @error('sector_id')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                            </div>
+
+                            @foreach ($sectors as $sector)
+                                @if ($sector->constructs->isNotEmpty())
+                                    <fieldset class="border rounded p-3 mb-3" x-show="sectorId === '{{ $sector->id }}'"
+                                              :disabled="sectorId !== '{{ $sector->id }}'" disabled x-cloak>
+                                        <legend class="float-none w-auto px-1 fs-6">Sector-specific ratings</legend>
+                                        @foreach ($sector->constructs as $construct)
+                                            <div class="mb-3">
+                                                <label for="construct-level-{{ $construct->id }}" class="form-label mb-1">
+                                                    {{ $construct->code }} · {{ $construct->name }}
+                                                </label>
+                                                <p class="small text-muted text-break mb-1" id="construct-requirement-{{ $construct->id }}">{{ $construct->requirement }}</p>
+                                                <select id="construct-level-{{ $construct->id }}" name="sector_levels[{{ $construct->id }}]"
+                                                        class="form-select form-select-sm @error('sector_levels.'.$construct->id) is-invalid @enderror"
+                                                        aria-describedby="construct-requirement-{{ $construct->id }}">
+                                                    <option value="">Unassessed</option>
+                                                    @foreach (App\Enums\MaturityLevel::cases() as $level)
+                                                        <option value="{{ $level->value }}" @selected((string) old('sector_levels.'.$construct->id) === (string) $level->value)>
+                                                            {{ $level->value }} · {{ $level->label() }}
+                                                        </option>
+                                                    @endforeach
+                                                </select>
+                                                @error('sector_levels.'.$construct->id)
+                                                    <div class="invalid-feedback">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+                                        @endforeach
+                                    </fieldset>
+                                @endif
+                            @endforeach
+                        @endif
+                        @error('sector_levels')
+                            <p class="text-danger small" role="alert">{{ $message }}</p>
+                        @enderror
 
                         <button type="submit" class="btn btn-primary" :disabled="submitting">
                             <span class="spinner-border spinner-border-sm me-1" x-show="submitting" x-cloak aria-hidden="true"></span>
@@ -95,8 +143,9 @@
 
 @push('scripts')
     <script>
-        function assessmentUpload(maxKb) {
+        function assessmentUpload(maxKb, sectorId) {
             return {
+                sectorId,
                 dragging: false,
                 submitting: false,
                 fileName: '',

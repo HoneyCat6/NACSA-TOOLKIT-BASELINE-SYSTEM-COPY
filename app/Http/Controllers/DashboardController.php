@@ -3,10 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AuditCategory;
-use App\Enums\ComplianceStatus;
 use App\Enums\Domain;
 use App\Enums\NotificationType;
-use App\Enums\RiskCategory;
 use App\Enums\Role;
 use App\Models\Assessment;
 use App\Models\AuditLog;
@@ -94,7 +92,8 @@ class DashboardController extends Controller
      */
     private function officerData(TrendService $trends): array
     {
-        $assessments = Assessment::query()->with('trend')->chronological()->get();
+        $latestSector = Assessment::query()->newestFirst()->value('sector_id');
+        $assessments = Assessment::query()->where('sector_id', $latestSector)->with(['trend', 'sector'])->chronological()->get();
         $openDeadlines = ComplianceDeadline::query()->open()->with('officer')->orderBy('due_date')->orderBy('id')->get();
 
         return [
@@ -131,7 +130,8 @@ class DashboardController extends Controller
      */
     private function executiveData(ReportService $reports, ForecastService $forecasts): array
     {
-        $assessments = Assessment::query()->with('trend')->newestFirst()->limit(ForecastService::AssessmentCount)->get()->reverse()->values();
+        $latestSector = Assessment::query()->newestFirst()->value('sector_id');
+        $assessments = Assessment::query()->where('sector_id', $latestSector)->with(['trend', 'sector'])->newestFirst()->limit(ForecastService::AssessmentCount)->get()->reverse()->values();
         $latest = $assessments->last();
         $riskProfile = $latest === null ? [] : $reports->riskProfile($latest);
 
@@ -139,11 +139,7 @@ class DashboardController extends Controller
             'latest' => $latest,
             'riskProfile' => $riskProfile,
             'forecast' => $forecasts->outlook($assessments),
-            'complianceStatus' => $latest === null ? null : ComplianceStatus::determine(
-                $latest->overall_band,
-                array_map(fn (array $domain): RiskCategory => RiskCategory::from($domain['risk']), $riskProfile),
-                $latest->unanswered_count > 0,
-            ),
+            'complianceStatus' => $latest === null ? null : $reports->complianceStatus($latest, $riskProfile),
             'latestReport' => ExecutiveReport::query()
                 ->with('assessment')
                 ->orderByDesc('generated_at')

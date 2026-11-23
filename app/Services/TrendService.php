@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\Band;
 use App\Enums\Domain;
 use App\Models\Assessment;
 use App\Models\AssessmentElement;
@@ -22,7 +23,8 @@ class TrendService
     {
         $previous = $current->previous();
 
-        if ($previous === null) {
+        if ($previous === null || $current->overall_band === Band::NotApplicable
+            || ($current->sector_id !== null && $current->disabledCoreCodes() !== $previous->disabledCoreCodes())) {
             return null;
         }
 
@@ -89,7 +91,7 @@ class TrendService
      * Chart.js payload for the trend dashboard (TECH_SPEC §11.3). A series is "declining" when the latest cycle fell.
      *
      * @param  Collection<int, Assessment>  $assessments  in chronological order, with `trend` loaded
-     * @return array{labels: list<string>, datasets: list<array{label: string, data: list<?float>, declining: bool}>, overall: list<float>}
+     * @return array{labels: list<string>, datasets: list<array{label: string, data: list<?float>, declining: bool}>, overall: list<?float>}
      */
     public function chartData(Collection $assessments): array
     {
@@ -102,7 +104,7 @@ class TrendService
                 'data' => $assessments->map(fn (Assessment $assessment): ?float => $this->toFloat($assessment->{$domain->scoreColumn()}))->all(),
                 'declining' => $latestTrend !== null && $this->isDeclining($latestTrend, $domain),
             ], Domain::cases()),
-            'overall' => $assessments->map(fn (Assessment $assessment): float => (float) $assessment->overall_score)->all(),
+            'overall' => $assessments->map(fn (Assessment $assessment): ?float => $assessment->overall_band === Band::NotApplicable ? null : (float) $assessment->overall_score)->all(),
         ];
     }
 

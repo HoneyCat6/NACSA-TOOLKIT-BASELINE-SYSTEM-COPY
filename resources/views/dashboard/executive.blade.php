@@ -10,7 +10,7 @@
             <div class="col-lg-5">
                 <div class="card shadow-sm h-100 border-start border-4" style="border-left-color: {{ $complianceStatus->severity()->colour() }} !important;">
                     <div class="card-body">
-                        <div class="small text-muted mb-1">Overall compliance posture · {{ $latest->cycle_label }}, assessed {{ $latest->assessment_date->format('j M Y') }}</div>
+                        <div class="small text-muted mb-1">Overall compliance posture · {{ $latest->cycle_label }}{{ $latest->sector ? ' · '.$latest->sector->name : '' }}, assessed {{ $latest->assessment_date->format('j M Y') }}</div>
                         <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
                             @include('partials.severity-badge', [
                                 'severity' => $complianceStatus->severity(),
@@ -26,7 +26,7 @@
                                 'severity' => $latest->overall_band->severity(),
                                 'label' => $latest->overall_band->value,
                             ])
-                            <span class="ms-1">score <strong>{{ $latest->overall_score }}</strong></span>
+                            <span class="ms-1">score <strong>{{ $latest->overallScoreLabel() }}</strong></span>
                         </div>
                         <div class="small text-muted mt-1">Share of the 33 baseline controls with at least one measure in place (0–1).</div>
                         <div class="small text-muted mt-2">This status is an indicative reading of the self-assessment, not a legal determination.</div>
@@ -110,7 +110,7 @@
                                     {{ $domain['area'] }}
                                     <div class="small text-muted fw-normal">NCSB {{ $domain['domain'] }}</div>
                                 </th>
-                                <td>@include('partials.severity-badge', ['severity' => $risk->severity(), 'label' => $risk->value])</td>
+                                <td>@include('partials.severity-badge', ['severity' => $risk->severity(), 'label' => $domain['applicable'] ? $risk->value : 'N/A'])</td>
                                 <td class="text-nowrap small">
                                     @switch($domain['change'])
                                         @case('Improved')

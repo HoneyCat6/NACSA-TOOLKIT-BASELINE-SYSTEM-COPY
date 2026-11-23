@@ -49,7 +49,7 @@ class SimulatorController extends Controller
         return response()->json([
             'projected' => $simulator->project($baseline, $request->overrides())->toArray(),
             'baseline' => [
-                'overall_score' => (float) $baseline->overall_score,
+                'overall_score' => $baseline->overall_score === null ? null : (float) $baseline->overall_score,
                 'overall_band' => $baseline->overall_band->value,
             ],
         ]);
@@ -100,7 +100,7 @@ class SimulatorController extends Controller
             'baseline' => $baseline,
             'session' => $session,
             'state' => $baseline ? $simulator->baselineState($baseline) : null,
-            'rules' => $simulator->projectionRules(),
+            'rules' => $simulator->projectionRules($baseline),
             // After a failed save the sliders come back as they were; a reloaded scenario starts from its saved levels.
             'initialOverrides' => (object) $request->old('overrides', $session?->modified_responses ?? []),
             'sessions' => SimulationSession::query()

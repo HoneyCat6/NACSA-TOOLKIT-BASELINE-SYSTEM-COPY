@@ -505,6 +505,84 @@ Also create: `RiskCategory` (Critical/High/Moderate/Acceptable), `DeadlineStatus
 
 ## 5. Database Migrations
 
+### Sector-specific construct customisation
+
+```mermaid
+erDiagram
+    SECTORS ||--o{ SECTOR_CORE_CONSTRUCTS : configures
+    NCSB_ELEMENTS ||--o{ SECTOR_CORE_CONSTRUCTS : references
+    SECTORS ||--o{ SECTOR_CONSTRUCTS : defines
+    SECTORS o|--o{ ASSESSMENTS : scopes
+    ASSESSMENTS ||--o{ ASSESSMENT_ELEMENTS : snapshots
+    NCSB_ELEMENTS ||--o{ ASSESSMENT_ELEMENTS : references
+    ASSESSMENTS ||--o{ SECTOR_CONSTRUCT_SCORES : snapshots
+    SECTOR_CONSTRUCTS ||--o{ SECTOR_CONSTRUCT_SCORES : references
+    USERS ||--o{ ASSESSMENTS : uploads
+    USERS o|--o{ AUDIT_LOGS : acts
+    SECTORS o|..o{ AUDIT_LOGS : "polymorphic subject"
+    SECTOR_CORE_CONSTRUCTS o|..o{ AUDIT_LOGS : "polymorphic subject"
+    SECTOR_CONSTRUCTS o|..o{ AUDIT_LOGS : "polymorphic subject"
+
+    SECTORS {
+        bigint id PK
+        varchar name UK
+        varchar code_of_practice "optional reference"
+    }
+    NCSB_ELEMENTS {
+        bigint id PK
+        varchar code UK
+    }
+    SECTOR_CORE_CONSTRUCTS {
+        bigint id PK
+        bigint sector_id FK
+        bigint ncsb_element_id FK
+        enum status "active or disabled"
+        varchar reason "optional"
+    }
+    SECTOR_CONSTRUCTS {
+        bigint id PK
+        bigint sector_id FK
+        varchar code
+        varchar name
+        enum domain
+        text requirement
+    }
+    ASSESSMENTS {
+        bigint id PK
+        bigint sector_id FK "nullable for the standard baseline"
+        bigint created_by FK
+        decimal overall_score "nullable when all core constructs are N/A"
+    }
+    ASSESSMENT_ELEMENTS {
+        bigint id PK
+        bigint assessment_id FK
+        bigint ncsb_element_id FK
+        enum status "scored, unanswered or disabled"
+    }
+    SECTOR_CONSTRUCT_SCORES {
+        bigint id PK
+        bigint assessment_id FK
+        bigint sector_construct_id FK
+        tinyint maturity_level "0–3 or null when unassessed"
+    }
+    AUDIT_LOGS {
+        bigint id PK
+        bigint user_id FK
+        varchar action
+        enum category
+        varchar auditable_type
+        bigint auditable_id
+        json metadata
+    }
+```
+
+- Unique pairs are `(sector_id, ncsb_element_id)`, `(sector_id, code)` and `(assessment_id, sector_construct_id)`.
+- The 33 seeded core definitions stay in `ncsb_elements`. A missing sector override means active. A database trigger rejects row deletion from the core catalogue. The runtime database account should lack privileges to truncate or drop schema objects.
+- The assessment retains each core element's applicability and one rating row per sector-specific construct present at upload. Core coverage divides implemented core elements by applicable core elements. Domain means include applicable scored core elements. The extension average uses only submitted 0–3 ratings, including level 0.
+- The upload keeps the official workbook format. The Compliance Officer selects an optional sector and enters extension ratings in the upload form. Cycle dates are ordered within each assessment series. Cycle labels and workbook fingerprints remain globally unique.
+- Drop, restore and add actions write technical audit events in the same transaction as the configuration change. Trends and forecasts compare compatible core scopes. Previously generated report payloads and PDFs retain their original content.
+
+
 Generate in this order — foreign keys depend on it.
 
 ```bash

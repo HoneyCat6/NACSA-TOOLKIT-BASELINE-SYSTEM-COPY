@@ -6,6 +6,7 @@ use App\Enums\Domain;
 use App\Enums\MaturityLevel;
 use Illuminate\Database\Eloquent\Attributes\Guarded;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * NCSB v1.4 reference data — seeded from the official toolkit, never user-editable (PRD §6).
@@ -24,6 +25,12 @@ class NcsbElement extends Model
             'domain' => Domain::class,
             'questions' => 'array',
         ];
+    }
+
+    /** @return HasMany<SectorCoreConstruct, $this> */
+    public function sectorOverrides(): HasMany
+    {
+        return $this->hasMany(SectorCoreConstruct::class);
     }
 
     /**

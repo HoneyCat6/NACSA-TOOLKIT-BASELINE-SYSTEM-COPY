@@ -11,6 +11,7 @@ use App\Enums\RiskCategory;
 use App\Models\Assessment;
 use App\Models\AssessmentElement;
 use App\Models\ExecutiveReport;
+use App\Models\SectorConstructScore;
 use App\Models\Setting;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -97,16 +98,20 @@ class ReportService
      *     overall_score: string,
      *     overall_band: string,
      *     compliance_status: string,
-     *     domains: list<array{domain: string, area: string, score: ?float, risk: string, narrative: string, change: ?string}>,
+     *     domains: list<array{domain: string, area: string, score: ?float, risk: string, narrative: string, change: ?string, applicable: bool}>,
      *     actions: list<array{rank: int, code: string, name: string, area: string, level: int, level_label: string, target_label: string, gap: int, action: string}>,
      *     unanswered: list<array{code: string, name: string}>,
+     *     sector: ?string,
+     *     sector_maturity_average: ?float,
+     *     sector_constructs: list<array{code: string, name: string, domain: string, level: ?int, level_label: string}>,
+     *     disabled_core_codes: list<string>,
      *     generated_by: string,
      *     generated_at: string,
      * }
      */
     public function buildPayload(Assessment $assessment, User $generatedBy, CarbonInterface $generatedAt): array
     {
-        $assessment->loadMissing(['elements.ncsbElement', 'trend']);
+        $assessment->loadMissing(['elements.ncsbElement', 'trend', 'sector', 'sectorConstructScores.sectorConstruct']);
 
         $domains = $this->riskProfile($assessment);
 
@@ -116,13 +121,9 @@ class ReportService
             'footer' => Setting::valueOf(Setting::ReportFooter),
             'cycle_label' => $assessment->cycle_label,
             'assessment_date' => $assessment->assessment_date->toDateString(),
-            'overall_score' => (string) $assessment->overall_score,
+            'overall_score' => $assessment->overallScoreLabel(),
             'overall_band' => $assessment->overall_band->value,
-            'compliance_status' => ComplianceStatus::determine(
-                $assessment->overall_band,
-                array_map(fn (array $domain): RiskCategory => RiskCategory::from($domain['risk']), $domains),
-                $assessment->unanswered_count > 0,
-            )->value,
+            'compliance_status' => $this->complianceStatus($assessment, $domains)->value,
             'domains' => $domains,
             'actions' => $this->prioritise($assessment),
             'unanswered' => $assessment->elements
@@ -134,6 +135,18 @@ class ReportService
                 ])
                 ->values()
                 ->all(),
+            'sector' => $assessment->sector?->name,
+            'sector_maturity_average' => $assessment->sectorMaturityAverage(),
+            'sector_constructs' => $assessment->sectorConstructScores
+                ->sortBy('sectorConstruct.code')
+                ->map(fn (SectorConstructScore $score): array => [
+                    'code' => $score->sectorConstruct->code,
+                    'name' => $score->sectorConstruct->name,
+                    'domain' => $score->sectorConstruct->domain->label(),
+                    'level' => $score->maturity_level?->value,
+                    'level_label' => $score->maturity_level?->label() ?? 'Unassessed',
+                ])->values()->all(),
+            'disabled_core_codes' => $assessment->elements->filter->isDisabled()->pluck('element_code')->sort()->values()->all(),
             'generated_by' => $generatedBy->name,
             'generated_at' => $generatedAt->toIso8601String(),
         ];
@@ -142,22 +155,27 @@ class ReportService
     /**
      * FR-30 / FR-31: a risk category and plain-language narrative for each of the six domains.
      *
-     * @return list<array{domain: string, area: string, score: ?float, risk: string, narrative: string, change: ?string}>
+     * @return list<array{domain: string, area: string, score: ?float, risk: string, narrative: string, change: ?string, applicable: bool}>
      */
     public function riskProfile(Assessment $assessment): array
     {
-        return array_map(function (Domain $domain) use ($assessment): array {
+        $applicableDomains = $assessment->sector_id === null ? null : $assessment->loadMissing('elements')
+            ->elements->reject->isDisabled()->pluck('domain');
+
+        return array_map(function (Domain $domain) use ($assessment, $applicableDomains): array {
             $score = $assessment->{$domain->scoreColumn()};
             $score = $score === null ? null : (float) $score;
             $risk = RiskCategory::fromDomainScore($score);
             $delta = $assessment->trend?->{$domain->deltaColumn()};
+            $applicable = $applicableDomains === null || $applicableDomains->contains($domain);
 
             return [
                 'domain' => $domain->value,
                 'area' => $domain->areaName(),
                 'score' => $score,
                 'risk' => $risk->value,
-                'narrative' => $risk->narrative($domain),
+                'narrative' => $applicable ? $risk->narrative($domain) : 'This area has no applicable core constructs in this cycle.',
+                'applicable' => $applicable,
                 'change' => match (true) {
                     $delta === null => null,
                     (float) $delta > 0 => 'Improved',
@@ -166,6 +184,16 @@ class ReportService
                 },
             ];
         }, Domain::cases());
+    }
+
+    /** @param list<array{risk: string, applicable: bool}> $domains */
+    public function complianceStatus(Assessment $assessment, array $domains): ComplianceStatus
+    {
+        return ComplianceStatus::determine(
+            $assessment->overall_band,
+            collect($domains)->where('applicable', true)->map(fn (array $domain): RiskCategory => RiskCategory::from($domain['risk'])),
+            $assessment->unanswered_count > 0,
+        );
     }
 
     /**

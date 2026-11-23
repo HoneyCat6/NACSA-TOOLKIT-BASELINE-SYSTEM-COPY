@@ -10,6 +10,9 @@
             <h1 class="h3 mb-1">{{ $assessment->cycle_label }}</h1>
             <p class="text-muted small mb-0">
                 Assessed {{ $assessment->assessment_date->format('j M Y') }}
+                @if ($assessment->sector)
+                    · {{ $assessment->sector->name }}
+                @endif
                 · uploaded by {{ $assessment->creator->name }} on {{ $assessment->created_at->format('j M Y') }}
                 · <span class="text-break">{{ $assessment->original_filename }}</span>
                 · <span class="badge text-bg-success">Validated</span>
@@ -33,8 +36,8 @@
                         'label' => $assessment->overall_band->value,
                         'class' => 'fs-5',
                     ])
-                    <div class="mt-2">Overall score <strong>{{ $assessment->overall_score }}</strong></div>
-                    <div class="small text-muted">Share of the 33 elements with at least one control implemented (0–1)</div>
+                    <div class="mt-2">Overall score <strong>{{ $assessment->overallScoreLabel() }}</strong></div>
+                    <div class="small text-muted">Share of {{ $assessment->sector ? 'applicable core elements' : 'the 33 elements' }} with at least one control implemented (0–1)</div>
                 </div>
             </div>
         </div>
@@ -47,7 +50,7 @@
                         <div class="small text-muted mt-2">Overall score compared with {{ $trend->previousAssessment->cycle_label }}</div>
                     @else
                         <div class="fs-5">—</div>
-                        <div class="small text-muted mt-2">First cycle — trends start with the next upload</div>
+                        <div class="small text-muted mt-2">{{ $assessment->sector ? 'No comparable previous cycle' : 'First cycle — trends start with the next upload' }}</div>
                     @endif
                 </div>
             </div>
@@ -56,7 +59,7 @@
             <div class="card shadow-sm h-100">
                 <div class="card-body">
                     <div class="small text-muted mb-1">Unanswered elements</div>
-                    <div class="fs-5 fw-semibold">{{ $assessment->unanswered_count }} <span class="fs-6 fw-normal text-muted">of 33</span></div>
+                    <div class="fs-5 fw-semibold">{{ $assessment->unanswered_count }} <span class="fs-6 fw-normal text-muted">of {{ $applicableCount }}</span></div>
                     <div class="small text-muted">Every question blank — listed below</div>
                 </div>
             </div>
@@ -189,12 +192,12 @@
                             <td class="fw-semibold text-nowrap">{{ $element->element_code }}</td>
                             <td>{{ $element->ncsbElement->name }}</td>
                             <td class="small">{{ $element->domain->value }}</td>
-                            <td class="text-center text-nowrap">{{ $element->yes_count }} / {{ $element->ncsbElement->question_count }}</td>
+                            <td class="text-center text-nowrap">{{ $element->isDisabled() ? '—' : $element->yes_count.' / '.$element->ncsbElement->question_count }}</td>
                             <td class="text-nowrap">
                                 @include('partials.severity-badge', [
                                     'severity' => $element->severity(),
                                     'label' => $element->maturity_level === null
-                                        ? 'Unanswered'
+                                        ? ($element->isDisabled() ? 'Disabled (N/A)' : 'Unanswered')
                                         : $element->maturity_level->value.' · '.$element->maturity_level->label(),
                                 ])
                             </td>
@@ -211,6 +214,24 @@
             </table>
         </div>
     </div>
+
+    @if ($assessment->sectorConstructScores->isNotEmpty())
+        @php($sectorAverage = $assessment->sectorMaturityAverage())
+        <div class="card shadow-sm mt-4">
+            <div class="card-header bg-white">
+                <h2 class="h5 mb-1">Sector-specific constructs</h2>
+                <div class="small text-muted">Average maturity {{ $sectorAverage === null ? 'unassessed' : number_format($sectorAverage, 2).' / 3' }}</div>
+            </div>
+            <ul class="list-group list-group-flush">
+                @foreach ($assessment->sectorConstructScores->sortBy('sectorConstruct.code') as $score)
+                    <li class="list-group-item d-flex flex-wrap justify-content-between gap-2">
+                        <span><strong>{{ $score->sectorConstruct->code }}</strong> {{ $score->sectorConstruct->name }}</span>
+                        <span>{{ $score->maturity_level === null ? 'Unassessed' : $score->maturity_level->value.' · '.$score->maturity_level->label() }}</span>
+                    </li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
 
     @can('delete', $assessment)
         <div class="card border-danger shadow-sm mt-4" x-data="{ open: {{ Js::from($errors->has('reason')) }} }">
@@ -245,6 +266,6 @@
             </div>
         </div>
     @elsecan('create', App\Models\Assessment::class)
-        <p class="small text-muted mt-4 mb-0">Only the latest cycle can be deleted, so earlier trends stay intact.</p>
+        <p class="small text-muted mt-4 mb-0">Only the latest cycle can be deleted@if ($assessment->sector) in this assessment series@endif.</p>
     @endcan
 @endsection

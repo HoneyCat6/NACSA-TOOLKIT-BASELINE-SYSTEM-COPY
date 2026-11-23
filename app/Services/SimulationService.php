@@ -6,6 +6,7 @@ use App\DataObjects\SimulationResult;
 use App\Enums\AuditCategory;
 use App\Enums\Band;
 use App\Enums\Domain;
+use App\Enums\ElementStatus;
 use App\Enums\MaturityLevel;
 use App\Enums\RiskCategory;
 use App\Enums\Severity;
@@ -59,14 +60,15 @@ class SimulationService
             $domainDeltas[$domain->value] = $projected === null || $base === null ? null : round($projected - (float) $base, 2);
         }
 
-        $overallScore = round($working->where('implemented', true)->count() / config('ncsb.element_count'), 3);
+        $applicableCount = $this->applicableCount($baseline);
+        $overallScore = $applicableCount === 0 ? null : round($working->where('implemented', true)->count() / $applicableCount, 3);
 
         return new SimulationResult(
             projectedDomainScores: $domainScores,
             domainDeltas: $domainDeltas,
             projectedOverallScore: $overallScore,
             projectedBand: Band::fromScore($overallScore),
-            overallDelta: round($overallScore - (float) $baseline->overall_score, 3),
+            overallDelta: $overallScore === null ? null : round($overallScore - (float) $baseline->overall_score, 3),
             elementsAtTarget: $working->where('level', MaturityLevel::Target->value)->count(),
             overrides: $overrides,
         );
@@ -122,7 +124,7 @@ class SimulationService
      * The baseline as the slider list and the in-browser projection need it: elements in questionnaire order,
      * the six stored domain scores and the stored overall score (FR-61).
      *
-     * @return array{elements: list<array{code: string, name: string, domain: string, level: ?int, implemented: bool}>, domains: list<array{value: string, label: string, area: string, score: ?float}>, overall_score: float, overall_band: string, elements_at_target: int}
+     * @return array{elements: list<array{code: string, name: string, domain: string, level: ?int, implemented: bool}>, domains: list<array{value: string, label: string, area: string, score: ?float}>, overall_score: ?float, overall_band: string, elements_at_target: int}
      */
     public function baselineState(Assessment $baseline): array
     {
@@ -145,7 +147,7 @@ class SimulationService
                 'area' => $domain->areaName(),
                 'score' => $baseline->{$domain->scoreColumn()} === null ? null : (float) $baseline->{$domain->scoreColumn()},
             ], Domain::cases()),
-            'overall_score' => (float) $baseline->overall_score,
+            'overall_score' => $baseline->overall_score === null ? null : (float) $baseline->overall_score,
             'overall_band' => $baseline->overall_band->value,
             'elements_at_target' => $elements->where('maturity_level', MaturityLevel::Target)->count(),
         ];
@@ -156,7 +158,7 @@ class SimulationService
      *
      * @return array{elementCount: int, bands: list<array{value: string, minimum: float, colour: string, textColour: string}>, risks: list<array{value: string, minimum: ?float, colour: string, textColour: string}>, levels: array<int|string, array{label: string, colour: string, textColour: string}>}
      */
-    public function projectionRules(): array
+    public function projectionRules(?Assessment $baseline = null): array
     {
         $levels = [];
         foreach (MaturityLevel::cases() as $level) {
@@ -165,13 +167,13 @@ class SimulationService
         $levels['unanswered'] = ['label' => Severity::Unanswered->label(), 'colour' => Severity::Unanswered->colour(), 'textColour' => Severity::Unanswered->textColour()];
 
         return [
-            'elementCount' => (int) config('ncsb.element_count'),
+            'elementCount' => $this->applicableCount($baseline),
             'bands' => array_map(fn (Band $band): array => [
                 'value' => $band->value,
                 'minimum' => $band->minimumScore(),
                 'colour' => $band->severity()->colour(),
                 'textColour' => $band->severity()->textColour(),
-            ], Band::cases()),
+            ], Band::scoredBands()),
             'risks' => array_map(fn (RiskCategory $risk): array => [
                 'value' => $risk->value,
                 'minimum' => $risk->minimumScore(),
@@ -180,6 +182,11 @@ class SimulationService
             ], RiskCategory::cases()),
             'levels' => $levels,
         ];
+    }
+
+    private function applicableCount(?Assessment $baseline): int
+    {
+        return (int) config('ncsb.element_count') - count($baseline?->disabledCoreCodes() ?? []);
     }
 
     /**
@@ -215,6 +222,7 @@ class SimulationService
     private function elements(Assessment $baseline): EloquentCollection
     {
         return $baseline->elements()
+            ->where('assessment_elements.status', '!=', ElementStatus::Disabled)
             ->with('ncsbElement')
             ->join('ncsb_elements', 'assessment_elements.ncsb_element_id', '=', 'ncsb_elements.id')
             ->orderBy('ncsb_elements.sort_order')

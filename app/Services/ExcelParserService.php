@@ -22,9 +22,11 @@ class ExcelParserService
     public const UnreadableMessage = 'The file could not be read. Confirm it is an unmodified .xlsx toolkit.';
 
     /**
+     * @param  list<string>  $disabledCodes
+     *
      * @throws TemplateValidationException Nothing should be persisted when this is thrown.
      */
-    public function parse(string $path): ParsedAssessment
+    public function parse(string $path, array $disabledCodes = []): ParsedAssessment
     {
         $elements = NcsbElement::query()->orderBy('sort_order')->get();
 
@@ -36,7 +38,7 @@ class ExcelParserService
         $this->assertQuestionsMatch($questionnaire, $elements);
         $this->assertElementNamesMatch($questionnaire, $elements);
 
-        return $this->extract($questionnaire, $elements);
+        return $this->extract($questionnaire, $elements->reject(fn (NcsbElement $element): bool => in_array($element->code, $disabledCodes, true)));
     }
 
     private function loadQuestionnaire(string $path): Worksheet

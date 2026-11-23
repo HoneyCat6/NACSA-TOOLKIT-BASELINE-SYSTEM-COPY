@@ -30,7 +30,10 @@
             width: 100%;
             cursor: pointer;
         }
-        .heatmap-cell-id { font-size: 12px; font-weight: 600; }
+        .heatmap-cell--disabled { border: 2px dashed #6c757d; }
+        .heatmap-cell--sector { border: 2px solid #0d6efd; }
+        .heatmap-cell-type { font-size: 11px; line-height: 1; }
+        .heatmap-cell-id { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .heatmap-cell-score { font-size: 22px; font-weight: 700; line-height: 1; }
         @media (max-width: 767.98px) {
             .heatmap-function-inner { flex-direction: column; }
@@ -44,7 +47,7 @@
     <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
         <div>
             <h1 class="h3 mb-1">Control effectiveness heatmap</h1>
-            <p class="text-muted small mb-0">All 33 NCSB control elements by maturity gap from the Level 3 target.</p>
+            <p class="text-muted small mb-0">Core NCSB and sector-specific constructs by maturity gap from Level 3.</p>
         </div>
         @if ($cycle)
             <form method="GET" action="{{ route('heatmap.index') }}" class="d-flex align-items-center gap-2">
@@ -52,7 +55,7 @@
                 <select id="cycle" name="cycle" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
                     @foreach ($cycles as $option)
                         <option value="{{ $option->id }}" @selected($option->id === $cycle->id)>
-                            {{ $option->cycle_label }} — {{ $option->assessment_date->format('j M Y') }}
+                            {{ $option->cycle_label }} — {{ $option->assessment_date->format('j M Y') }}{{ $option->sector ? ' · '.$option->sector->name : '' }}
                         </option>
                     @endforeach
                 </select>
@@ -76,8 +79,17 @@
                 <div>
                     <span class="small text-muted">Showing</span>
                     <strong>{{ $cycle->cycle_label }}</strong>
+                    @if ($cycle->sector)
+                        <span class="small text-muted">· {{ $cycle->sector->name }}</span>
+                    @endif
                     <span class="text-muted small">· assessed {{ $cycle->assessment_date->format('j M Y') }}</span>
                 </div>
+                @if ($cycle->sectorConstructScores->isNotEmpty())
+                    @php($sectorAverage = $cycle->sectorMaturityAverage())
+                    <span class="small">Sector-specific average
+                        <strong>{{ $sectorAverage === null ? 'Unassessed' : number_format($sectorAverage, 2).' / 3' }}</strong>
+                    </span>
+                @endif
                 <div class="ms-md-auto">
                     @include('partials.severity-badge', [
                         'severity' => $cycle->overall_band->severity(),
@@ -88,7 +100,12 @@
         </div>
 
         {{-- Legend — colour is never the only signal (FR-54). --}}
-        <div class="d-flex flex-wrap gap-2 mb-3" aria-label="Heatmap legend">
+        <div class="d-flex flex-wrap gap-2 mb-2" aria-label="Construct states">
+            <span class="badge text-bg-light border">Core active</span>
+            <span class="badge text-bg-light heatmap-cell--disabled">Disabled (N/A)</span>
+            <span class="badge text-bg-light heatmap-cell--sector">Sector-specific</span>
+        </div>
+        <div class="d-flex flex-wrap gap-2 mb-3" aria-label="Maturity legend">
             @foreach (App\Enums\Severity::cases() as $severity)
                 @include('partials.severity-badge', ['severity' => $severity, 'label' => $severity->label()])
             @endforeach
@@ -131,21 +148,25 @@
                                 <div class="heatmap-fn-name">{{ $group['domain']->label() }}</div>
                                 <div class="heatmap-fn-desc">{{ $group['domain']->areaName() }}</div>
                                 <div class="heatmap-fn-stat text-muted">
-                                    <strong>{{ $group['count'] }}</strong> controls ·
+                                    <strong>{{ $group['count'] }}</strong> active core ·
                                     avg <strong>{{ $group['average'] === null ? '–' : number_format($group['average'], 2) }}</strong>
                                 </div>
                             </div>
                             <div class="heatmap-grid">
                                 @foreach ($group['cells'] as $cell)
-                                    @php($maturity = $cell['level'] ?? 'unanswered')
+                                    @php($maturity = $cell['state'] === 'disabled' ? 'N/A' : ($cell['level'] ?? 'unassessed'))
                                     <button type="button"
-                                            class="heatmap-cell"
+                                            class="heatmap-cell heatmap-cell--{{ $cell['state'] }}"
                                             style="background:{{ $cell['severity']->colour() }};color:{{ $cell['severity']->textColour() }};"
                                             @click="show('{{ $cell['code'] }}')"
                                             title="{{ $cell['code'] }} — {{ $cell['name'] }} · maturity {{ $maturity }} · {{ $cell['label'] }}"
                                             aria-label="{{ $cell['code'] }}, maturity {{ $maturity }}, {{ $cell['label'] }}">
                                         <span class="heatmap-cell-id">{{ $cell['code'] }}</span>
-                                        <span class="heatmap-cell-score">{{ $cell['level'] ?? '–' }}</span>
+                                        <span class="heatmap-cell-score">{{ $cell['state'] === 'disabled' ? 'N/A' : ($cell['level'] ?? '–') }}</span>
+                                        @if ($cell['state'] === 'sector')
+                                            <span class="heatmap-cell-type d-none d-lg-inline">Sector-specific</span>
+                                            <span class="heatmap-cell-type d-lg-none">Sector</span>
+                                        @endif
                                     </button>
                                 @endforeach
                             </div>
@@ -186,17 +207,17 @@
                             <dd class="col-7" x-text="detail.category"></dd>
 
                             <dt class="col-5 text-muted fw-normal">Current level</dt>
-                            <dd class="col-7" x-text="detail.maturity_level === null ? 'Unanswered' : detail.maturity_level + ' (' + detail.level_label + ')'"></dd>
+                            <dd class="col-7" x-text="detail.maturity_level === null ? detail.level_label : detail.maturity_level + ' (' + detail.level_label + ')'"></dd>
 
                             <dt class="col-5 text-muted fw-normal">Gap from Level 3</dt>
                             <dd class="col-7" x-text="detail.gap_from_target === null ? '—' : detail.gap_from_target"></dd>
 
-                            <dt class="col-5 text-muted fw-normal">"Yes" answers</dt>
-                            <dd class="col-7" x-text="detail.yes_count + ' of ' + detail.question_count"></dd>
+                            <dt class="col-5 text-muted fw-normal" x-show="detail.yes_count !== null">"Yes" answers</dt>
+                            <dd class="col-7" x-show="detail.yes_count !== null" x-text="detail.yes_count + ' of ' + detail.question_count"></dd>
                         </dl>
 
                         <hr>
-                        <h3 class="h6">Remediation priority</h3>
+                        <h3 class="h6" x-text="detail.category === 'Sector-specific' ? 'Code of Practice requirement' : 'Remediation priority'"></h3>
                         <p class="small mb-0" x-text="detail.remediation_note"></p>
                     </div>
                 </template>

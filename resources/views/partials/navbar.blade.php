@@ -61,6 +61,10 @@
                            href="{{ route('admin.audit-logs.index') }}">Audit log</a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link @if (request()->routeIs('admin.constructs.*')) active @endif"
+                           href="{{ route('admin.constructs.index') }}">Sector constructs</a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link @if (request()->routeIs('admin.settings.*')) active @endif"
                            href="{{ route('admin.settings.edit') }}">Settings</a>
                     </li>

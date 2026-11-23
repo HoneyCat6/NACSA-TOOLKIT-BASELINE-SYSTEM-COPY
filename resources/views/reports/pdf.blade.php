@@ -4,7 +4,8 @@
     $generatedAt = \Illuminate\Support\Carbon::parse($report['generated_at']);
     $band = App\Enums\Band::from($report['overall_band']);
     $status = App\Enums\ComplianceStatus::from($report['compliance_status']);
-    $elevatedCount = collect($report['domains'])->whereIn('risk', [App\Enums\RiskCategory::Critical->value, App\Enums\RiskCategory::High->value])->count();
+    $applicableDomains = collect($report['domains'])->filter(fn (array $domain): bool => $domain['applicable'] ?? true);
+    $elevatedCount = $applicableDomains->whereIn('risk', [App\Enums\RiskCategory::Critical->value, App\Enums\RiskCategory::High->value])->count();
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -26,6 +27,9 @@
         table.grid th { text-align: left; font-size: 8pt; text-transform: uppercase; color: #495057; background: #f1f3f5; padding: 5pt 6pt; border-bottom: 1pt solid #ced4da; }
         table.grid td { padding: 6pt; border-bottom: 0.5pt solid #dee2e6; vertical-align: top; }
         table.grid tr { page-break-inside: avoid; }
+        table.sector-grid { table-layout: fixed; }
+        table.sector-grid td { word-wrap: break-word; }
+        .sector-section h2 { page-break-after: avoid; }
         .footer { position: fixed; bottom: -12mm; left: 0; right: 0; font-size: 7.5pt; color: #6c757d; border-top: 0.5pt solid #dee2e6; padding-top: 3pt; }
         .footer .page:after { content: counter(page); }
         .cover { padding-top: 45mm; }
@@ -59,6 +63,12 @@
                 <td class="muted">Assessment date</td>
                 <td><strong>{{ $assessmentDate->format('j F Y') }}</strong></td>
             </tr>
+            @if ($report['sector'] ?? null)
+                <tr>
+                    <td class="muted">Sector</td>
+                    <td>{{ $report['sector'] }}</td>
+                </tr>
+            @endif
             <tr>
                 <td class="muted">Overall posture</td>
                 <td>
@@ -78,6 +88,17 @@
             </tr>
         </table>
 
+        @if ($report['sector'] ?? null)
+            <p class="small muted" style="margin-top: 16pt;">
+                Core posture measures coverage of applicable NCSB constructs. Risk by area uses their scored maturity levels.
+                Sector-specific constructs have a separate maturity average.
+            </p>
+            <p class="small muted">
+                * The Cyber Security Act 2024 status is indicative and uses the applicable core results.
+                It is not a legal determination of compliance.
+            </p>
+        @endif
+
         @if ($report['footer'])
             <p style="margin-top: 30pt;"><strong>{{ $report['footer'] }}</strong></p>
         @endif
@@ -89,7 +110,13 @@
         <div class="callout" style="border-left-color: {{ $band->severity()->colour() }};">
             <p>
                 Overall cybersecurity posture is <strong>{{ $band->value }}</strong>.
-                {{ $elevatedCount === 0 ? 'No area' : $elevatedCount.' of 6 areas' }} {{ $elevatedCount === 1 ? 'is' : 'are' }} at critical or high risk.
+                @if ($applicableDomains->isNotEmpty())
+                    @if ($elevatedCount === 0)
+                        No area is at critical or high risk.
+                    @else
+                        {{ $elevatedCount }} of {{ $applicableDomains->count() }} applicable areas {{ $elevatedCount === 1 ? 'is' : 'are' }} at critical or high risk.
+                    @endif
+                @endif
             </p>
             <p style="margin: 0;">
                 Indicative Cyber Security Act 2024 status: <strong>{{ $status->value }}</strong>. {{ $status->summary() }}*
@@ -117,7 +144,7 @@
                             <div class="small muted">NCSB domain: {{ $domain['domain'] }}</div>
                         </td>
                         <td>
-                            <span class="badge" style="background: {{ $risk->severity()->colour() }}; color: {{ $risk->severity()->textColour() }};">{{ $risk->value }}</span>
+                            <span class="badge" style="background: {{ $risk->severity()->colour() }}; color: {{ $risk->severity()->textColour() }};">{{ ($domain['applicable'] ?? true) ? $risk->value : 'N/A' }}</span>
                         </td>
                         <td>{{ $domain['change'] ?? 'Not available' }}</td>
                     </tr>
@@ -131,7 +158,7 @@
         <h2>What this means for the organisation</h2>
         @foreach ($report['domains'] as $domain)
             <div class="narrative">
-                <h3>{{ $domain['area'] }} <span class="small muted">· {{ $domain['risk'] }}</span></h3>
+                <h3>{{ $domain['area'] }} <span class="small muted">· {{ ($domain['applicable'] ?? true) ? $domain['risk'] : 'N/A' }}</span></h3>
                 <p>{{ $domain['narrative'] }}</p>
             </div>
         @endforeach
@@ -173,6 +200,42 @@
         @endif
     </div>
 
+    @if (($report['disabled_core_codes'] ?? []) !== [])
+        <div class="section">
+            <h2>Core constructs marked N/A</h2>
+            <p>{{ implode(', ', $report['disabled_core_codes']) }}</p>
+        </div>
+    @endif
+
+    @if (($report['sector_constructs'] ?? []) !== [])
+        <div class="section sector-section">
+            <h2>Sector-specific extensions</h2>
+            <p>Sector-specific maturity average
+                <strong>{{ $report['sector_maturity_average'] === null ? 'Unassessed' : number_format($report['sector_maturity_average'], 2).' / 3' }}</strong>
+            </p>
+            <table class="grid sector-grid">
+                <thead>
+                    <tr>
+                        <th style="width: 18%;">Code</th>
+                        <th style="width: 42%;">Sector-specific construct</th>
+                        <th style="width: 17%;">Domain</th>
+                        <th>Maturity</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($report['sector_constructs'] as $construct)
+                        <tr>
+                            <td>{{ $construct['code'] }}</td>
+                            <td>{{ $construct['name'] }}</td>
+                            <td>{{ $construct['domain'] }}</td>
+                            <td>{{ $construct['level'] === null ? $construct['level_label'] : $construct['level'].' · '.$construct['level_label'] }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
+
     @if ($report['unanswered'] !== [])
         <div class="section">
             <h2>Not assessed in this cycle</h2>
@@ -188,15 +251,17 @@
         </div>
     @endif
 
-    <p class="small muted">
-        * The Cyber Security Act 2024 status is indicative only. It applies this system's rule to the self-assessment
-        results: <em>Non-compliant</em> if any area is at critical risk or the overall posture is Initial;
-        <em>Compliant</em> if the overall posture is Advanced, every area is at moderate risk or better and every control
-        was assessed; otherwise <em>Partially compliant</em>. It is not a legal determination of compliance.
-    </p>
-    <p class="small muted">
-        Risk by area is derived from the average maturity of the controls in each area of the NCSB v1.4 self-assessment.
-        Overall posture is the share of the 33 controls with at least one practice in place.
-    </p>
+    @if (! ($report['sector'] ?? null))
+        <p class="small muted">
+            * The Cyber Security Act 2024 status is indicative only. It applies this system's rule to the self-assessment
+            results: <em>Non-compliant</em> if any area is at critical risk or the overall posture is Initial;
+            <em>Compliant</em> if the overall posture is Advanced, every area is at moderate risk or better and every control
+            was assessed; otherwise <em>Partially compliant</em>. It is not a legal determination of compliance.
+        </p>
+        <p class="small muted">
+            Risk by area is derived from the average maturity of the controls in each area of the NCSB v1.4 self-assessment.
+            Overall posture is the share of the 33 controls with at least one practice in place.
+        </p>
+    @endif
 </body>
 </html>

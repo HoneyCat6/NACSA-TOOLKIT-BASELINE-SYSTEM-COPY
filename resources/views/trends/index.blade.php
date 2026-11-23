@@ -3,7 +3,20 @@
 @section('title', 'Compliance trends')
 
 @section('content')
-    <h1 class="h3 mb-3">Compliance trends</h1>
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <h1 class="h3 mb-0">Compliance trends</h1>
+        @if ($sectors->isNotEmpty())
+            <form method="GET" action="{{ route('trends.index') }}" class="d-flex align-items-center gap-2">
+                <label for="trend-sector" class="small">Sector</label>
+                <select id="trend-sector" name="sector" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="0" @selected($sector === null)>Standard NCSB baseline</option>
+                    @foreach ($sectors as $option)
+                        <option value="{{ $option->id }}" @selected($sector?->is($option))>{{ $option->name }}</option>
+                    @endforeach
+                </select>
+            </form>
+        @endif
+    </div>
 
     @if ($latest === null)
         <div class="card shadow-sm">
@@ -26,8 +39,8 @@
                             'label' => $latest->overall_band->value,
                             'class' => 'fs-5',
                         ])
-                        <span class="ms-2">score <strong>{{ $latest->overall_score }}</strong></span>
-                        <div class="small text-muted mt-1">Share of the 33 elements with at least one control implemented (0–1)</div>
+                        <span class="ms-2">score <strong>{{ $latest->overallScoreLabel() }}</strong></span>
+                        <div class="small text-muted mt-1">Share of applicable core elements with at least one control implemented (0–1)</div>
                     </div>
                 </div>
             </div>

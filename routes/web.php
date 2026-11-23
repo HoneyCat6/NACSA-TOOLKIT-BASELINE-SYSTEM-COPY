@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Admin\AuditLogController;
+use App\Http\Controllers\Admin\SectorConstructController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\AlertController;
@@ -59,6 +60,11 @@ Route::middleware(['auth', 'mfa'])->group(function () {
                 ->name('users.password-reset');
 
             Route::get('/audit-logs', [AuditLogController::class, 'technical'])->name('audit-logs.index');
+
+            Route::get('/constructs/{sector?}', [SectorConstructController::class, 'index'])->name('constructs.index');
+            Route::post('/sectors', [SectorConstructController::class, 'storeSector'])->name('sectors.store');
+            Route::patch('/constructs/{sector}/core/{element}', [SectorConstructController::class, 'updateCore'])->name('constructs.core.update');
+            Route::post('/constructs/{sector}', [SectorConstructController::class, 'storeConstruct'])->name('constructs.store');
 
             Route::get('/settings', [SettingsController::class, 'edit'])->name('settings.edit');
             Route::put('/settings', [SettingsController::class, 'update'])->name('settings.update');

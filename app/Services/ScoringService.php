@@ -11,6 +11,8 @@ use App\Enums\ElementStatus;
 use App\Enums\MaturityLevel;
 use App\Models\Assessment;
 use App\Models\NcsbElement;
+use App\Models\Sector;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
 /**
@@ -20,13 +22,18 @@ use InvalidArgumentException;
  */
 class ScoringService
 {
-    public function score(ParsedAssessment $parsed): ScoredAssessment
+    /** @param array<int, int|string|null> $sectorLevels */
+    public function score(ParsedAssessment $parsed, ?Sector $sector = null, array $sectorLevels = []): ScoredAssessment
     {
+        $disabled = $sector?->disabledCoreCodes() ?? [];
         $elements = [];
 
         foreach (NcsbElement::query()->orderBy('sort_order')->get() as $reference) {
-            $responses = $parsed->responsesByElement[$reference->code]
-                ?? throw new InvalidArgumentException("No responses for element {$reference->code}.");
+            $isDisabled = in_array($reference->code, $disabled, true);
+            $responses = $isDisabled
+                ? array_fill(0, $reference->question_count, null)
+                : ($parsed->responsesByElement[$reference->code]
+                    ?? throw new InvalidArgumentException("No responses for element {$reference->code}."));
 
             $yesCount = count(array_filter($responses, fn (?bool $answer): bool => $answer === true));
             $isUnanswered = in_array($reference->code, $parsed->unansweredCodes, true);
@@ -36,22 +43,30 @@ class ScoringService
                 code: $reference->code,
                 domain: $reference->domain,
                 yesCount: $yesCount,
-                level: $isUnanswered ? null : $this->levelFor($yesCount, $reference),
-                status: $isUnanswered ? ElementStatus::Unanswered : ElementStatus::Scored,
+                level: $isDisabled || $isUnanswered ? null : $this->levelFor($yesCount, $reference),
+                status: match (true) {
+                    $isDisabled => ElementStatus::Disabled,
+                    $isUnanswered => ElementStatus::Unanswered,
+                    default => ElementStatus::Scored,
+                },
                 responses: $responses,
             );
         }
 
-        $overallScore = $this->overallScore($elements);
+        $applicableCount = count($elements) - count($disabled);
+        $implementedCount = collect($elements)->where('yesCount', '>=', 1)->count();
+        $overallScore = $applicableCount === 0 ? null : round($implementedCount / $applicableCount, 3);
 
         return new ScoredAssessment(
             elements: $elements,
             domainScores: $this->domainScores($elements),
             overallScore: $overallScore,
             overallBand: Band::fromScore($overallScore),
-            unansweredCount: count($parsed->unansweredCodes),
+            unansweredCount: count(array_diff($parsed->unansweredCodes, $disabled)),
             defaultedCellCount: $parsed->defaultedCellCount,
             warnings: $parsed->warnings,
+            sectorId: $sector?->id,
+            sectorConstructLevels: $this->sectorConstructLevels($sector, $sectorLevels),
         );
     }
 
@@ -69,6 +84,7 @@ class ScoringService
 
         $assessment = Assessment::query()->create([
             ...$attributes,
+            'sector_id' => $scored->sectorId,
             ...$domainScores,
             'overall_score' => $scored->overallScore,
             'overall_band' => $scored->overallBand,
@@ -86,6 +102,13 @@ class ScoringService
             'status' => $element->status,
             'responses' => $element->responses,
         ], array_values($scored->elements)));
+
+        foreach ($scored->sectorConstructLevels as $constructId => $level) {
+            $assessment->sectorConstructScores()->create([
+                'sector_construct_id' => $constructId,
+                'maturity_level' => $level,
+            ]);
+        }
 
         return $assessment;
     }
@@ -125,14 +148,24 @@ class ScoringService
     }
 
     /**
-     * Overall = elements with at least one "Yes" ÷ 33, as the toolkit's `COUNTIF(D3:D35,">0")/33` (D-20).
-     *
-     * @param  array<string, ScoredElement>  $elements
+     * @param  array<int, int|string|null>  $submittedLevels
+     * @return array<int, ?MaturityLevel>
      */
-    private function overallScore(array $elements): float
+    private function sectorConstructLevels(?Sector $sector, array $submittedLevels): array
     {
-        $implemented = collect($elements)->filter(fn (ScoredElement $element): bool => $element->yesCount >= 1)->count();
+        $levels = [];
 
-        return round($implemented / config('ncsb.element_count'), 3);
+        foreach ($sector?->constructs()->pluck('id') ?? [] as $id) {
+            $value = $submittedLevels[$id] ?? null;
+            $levels[$id] = $value === null ? null : MaturityLevel::from((int) $value);
+        }
+
+        if (array_diff_key($submittedLevels, $levels) !== []) {
+            throw ValidationException::withMessages([
+                'sector_levels' => 'Choose ratings only for constructs in the selected sector.',
+            ]);
+        }
+
+        return $levels;
     }
 }

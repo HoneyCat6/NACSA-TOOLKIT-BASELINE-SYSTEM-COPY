@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\Band;
+use App\Enums\ElementStatus;
 use Illuminate\Database\Eloquent\Attributes\Guarded;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
@@ -46,6 +47,42 @@ class Assessment extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    /** @return BelongsTo<Sector, $this> */
+    public function sector(): BelongsTo
+    {
+        return $this->belongsTo(Sector::class);
+    }
+
+    /** @return HasMany<SectorConstructScore, $this> */
+    public function sectorConstructScores(): HasMany
+    {
+        return $this->hasMany(SectorConstructScore::class);
+    }
+
+    public function sectorMaturityAverage(): ?float
+    {
+        $average = $this->loadMissing('sectorConstructScores')->sectorConstructScores
+            ->map(fn (SectorConstructScore $score): ?int => $score->maturity_level?->value)
+            ->avg();
+
+        return $average === null ? null : round($average, 2);
+    }
+
+    public function overallScoreLabel(): string
+    {
+        return $this->overall_score ?? Band::NotApplicable->value;
+    }
+
+    /** @return list<string> */
+    public function disabledCoreCodes(): array
+    {
+        return $this->elements()
+            ->where('status', ElementStatus::Disabled)
+            ->orderBy('element_code')
+            ->pluck('element_code')
+            ->all();
+    }
+
     /**
      * @return HasMany<AssessmentElement, $this>
      */
@@ -86,6 +123,7 @@ class Assessment extends Model
     public function previous(): ?self
     {
         return static::query()
+            ->where('sector_id', $this->sector_id)
             ->where('assessment_date', '<', $this->assessment_date)
             ->newestFirst()
             ->first();
@@ -96,7 +134,7 @@ class Assessment extends Model
      */
     public function isLatest(): bool
     {
-        return static::query()->newestFirst()->value('id') === $this->id;
+        return static::query()->where('sector_id', $this->sector_id)->newestFirst()->value('id') === $this->id;
     }
 
     /**

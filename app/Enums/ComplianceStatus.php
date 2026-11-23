@@ -10,6 +10,7 @@ enum ComplianceStatus: string
     case Compliant = 'Compliant';
     case PartiallyCompliant = 'Partially compliant';
     case NonCompliant = 'Non-compliant';
+    case NotApplicable = 'N/A';
 
     /**
      * D-50: Non-compliant if any domain is Critical or the band is Initial; Compliant if the band is Advanced,
@@ -19,6 +20,10 @@ enum ComplianceStatus: string
      */
     public static function determine(Band $overallBand, iterable $domainRisks, bool $hasUnansweredElements): self
     {
+        if ($overallBand === Band::NotApplicable) {
+            return self::NotApplicable;
+        }
+
         $risks = collect($domainRisks);
 
         if ($overallBand === Band::Initial || $risks->contains(RiskCategory::Critical)) {
@@ -39,6 +44,7 @@ enum ComplianceStatus: string
     public function summary(): string
     {
         return match ($this) {
+            self::NotApplicable => 'There are no applicable core elements in this assessment.',
             self::Compliant => 'The baseline is established and every area meets at least a moderate standard.',
             self::PartiallyCompliant => 'Baseline controls are in place, but some areas carry high risk or have not been fully assessed.',
             self::NonCompliant => 'Critical gaps remain, or the baseline is largely not yet established.',
@@ -48,6 +54,7 @@ enum ComplianceStatus: string
     public function severity(): Severity
     {
         return match ($this) {
+            self::NotApplicable => Severity::Unanswered,
             self::Compliant => Severity::Compliant,
             self::PartiallyCompliant => Severity::Low,
             self::NonCompliant => Severity::Critical,

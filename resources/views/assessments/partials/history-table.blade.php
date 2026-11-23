@@ -14,7 +14,10 @@
             <tbody>
                 @foreach ($assessments as $assessment)
                     <tr>
-                        <td><a href="{{ route('assessments.show', $assessment) }}" class="fw-semibold">{{ $assessment->cycle_label }}</a></td>
+                        <td><a href="{{ route('assessments.show', $assessment) }}" class="fw-semibold">{{ $assessment->cycle_label }}</a>
+                        @if ($assessment->sector)
+                            <div class="small text-muted">{{ $assessment->sector->name }}</div>
+                        @endif</td>
                         <td>{{ $assessment->assessment_date->format('j M Y') }}</td>
                         <td class="text-break small">{{ $assessment->original_filename }}</td>
                         <td>{{ $assessment->creator->name }}</td>
@@ -24,7 +27,7 @@
                                 'severity' => $assessment->overall_band->severity(),
                                 'label' => $assessment->overall_band->value,
                             ])
-                            <span class="small text-muted ms-1">{{ $assessment->overall_score }}</span>
+                            <span class="small text-muted ms-1">{{ $assessment->overallScoreLabel() }}</span>
                         </td>
                     </tr>
                 @endforeach

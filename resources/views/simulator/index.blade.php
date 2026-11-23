@@ -98,12 +98,12 @@
                             <div class="small text-muted mb-1">Projected overall band</div>
                             <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
                                 <span class="badge fs-5" :style="bandStyle(projected.overall_band)" x-text="projected.overall_band"></span>
-                                <span>score <strong x-text="projected.overall_score.toFixed(3)"></strong></span>
-                                <span class="badge" :class="deltaClass(projected.overall_delta)" x-text="signed(projected.overall_delta, 3) + ' vs baseline'"></span>
+                                <span>score <strong x-text="projected.overall_band === 'N/A' ? 'N/A' : projected.overall_score.toFixed(3)"></strong></span>
+                                <span class="badge" x-show="projected.overall_delta !== null" :class="deltaClass(projected.overall_delta)" x-text="projected.overall_delta === null ? '' : signed(projected.overall_delta, 3) + ' vs baseline'"></span>
                             </div>
-                            <div class="small text-muted">Share of the 33 elements with at least one control implemented (0–1).</div>
+                            <div class="small text-muted">Share of applicable core elements with at least one control implemented (0–1).</div>
                             <div class="small text-muted">
-                                Baseline {{ $baseline->cycle_label }}: {{ number_format($state['overall_score'], 3) }} ({{ $state['overall_band'] }})
+                                Baseline {{ $baseline->cycle_label }}: {{ $baseline->overallScoreLabel() }} ({{ $state['overall_band'] }})
                             </div>
                             <hr>
                             <div class="d-flex justify-content-between small">
@@ -276,7 +276,7 @@
                                             'severity' => $saved->simulated_band->severity(),
                                             'label' => $saved->simulated_band->value,
                                         ])
-                                        <span class="small">{{ $saved->simulated_score }}</span>
+                                        <span class="small">{{ $saved->simulated_score ?? 'N/A' }}</span>
                                     </td>
                                     <td class="small">{{ count($saved->modified_responses) }}</td>
                                     <td class="small text-muted">{{ $saved->created_at->format('j M Y, H:i') }}</td>
@@ -403,14 +403,14 @@
                     const implemented = baseline.elements
                         .filter((element) => this.isChanged(element.code) ? this.overrides[element.code] >= 1 : element.implemented)
                         .length;
-                    const overallScore = round(implemented / rules.elementCount, 3);
+                    const overallScore = rules.elementCount === 0 ? null : round(implemented / rules.elementCount, 3);
 
                     return {
                         domain_scores: domainScores,
                         domain_deltas: domainDeltas,
                         overall_score: overallScore,
-                        overall_band: (bandsHighestFirst.find((band) => overallScore >= band.minimum) ?? bandsHighestFirst.at(-1)).value,
-                        overall_delta: round(overallScore - baseline.overall_score, 3),
+                        overall_band: rules.elementCount === 0 ? 'N/A' : (bandsHighestFirst.find((band) => overallScore >= band.minimum) ?? bandsHighestFirst.at(-1)).value,
+                        overall_delta: overallScore === null ? null : round(overallScore - baseline.overall_score, 3),
                         elements_at_target: baseline.elements.filter((element) => this.workingLevel(element.code) === 3).length,
                     };
                 },
@@ -430,7 +430,7 @@
                 },
 
                 bandStyle(value) {
-                    const band = rules.bands.find((candidate) => candidate.value === value);
+                    const band = rules.bands.find((candidate) => candidate.value === value) ?? rules.levels.unanswered;
 
                     return `background:${band.colour};color:${band.textColour}`;
                 },

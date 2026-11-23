@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Enums\Domain;
 use App\Models\Assessment;
 use App\Models\DegradationAlert;
+use App\Models\Sector;
 use App\Services\TrendService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
@@ -14,11 +16,16 @@ use Illuminate\View\View;
  */
 class TrendController extends Controller
 {
-    public function index(TrendService $trends): View
+    public function index(Request $request, TrendService $trends): View
     {
         Gate::authorize('viewTrends', Assessment::class);
 
-        $assessments = Assessment::query()->with('trend.previousAssessment')->chronological()->get();
+        $sectors = Sector::query()->orderBy('name')->get();
+        $sectorId = $request->filled('sector') ? $request->integer('sector') : Assessment::query()->newestFirst()->value('sector_id');
+        $sector = $sectorId ? $sectors->find($sectorId) : null;
+        abort_if($sectorId && $sector === null, 404);
+
+        $assessments = Assessment::query()->where('sector_id', $sector?->id)->with('trend.previousAssessment')->chronological()->get();
         $latest = $assessments->last();
         $latestTrend = $latest?->trend;
         $elementHistory = $trends->elementHistory($assessments);
@@ -28,6 +35,8 @@ class TrendController extends Controller
         ]);
 
         return view('trends.index', [
+            'sectors' => $sectors,
+            'sector' => $sector,
             'latest' => $latest,
             'latestTrend' => $latestTrend,
             'improvingCount' => $domainDeltas->filter(fn (?string $delta): bool => $delta !== null && (float) $delta > 0)->count(),

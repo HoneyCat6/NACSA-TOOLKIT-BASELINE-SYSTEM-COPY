@@ -8,11 +8,14 @@ use App\Exceptions\TemplateValidationException;
 use App\Jobs\SendDegradationAlertJob;
 use App\Models\Assessment;
 use App\Models\AssessmentTrend;
+use App\Models\Sector;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -31,22 +34,40 @@ class AssessmentImportService
     ) {}
 
     /**
+     * @param  array<int, int|string|null>  $sectorLevels
+     *
      * @throws TemplateValidationException The rejection is audited and nothing is persisted (D-31).
      */
-    public function import(UploadedFile $file, string $cycleLabel, CarbonInterface $assessmentDate, User $uploader): Assessment
-    {
-        try {
-            $scored = $this->scoring->score($this->parser->parse($file->getRealPath()));
-        } catch (TemplateValidationException $exception) {
-            $this->recordRejection($file, $exception->getMessage(), $uploader);
-
-            throw $exception;
-        }
-
-        $storedPath = $file->store('assessments', self::Disk);
+    public function import(
+        UploadedFile $file,
+        string $cycleLabel,
+        CarbonInterface $assessmentDate,
+        User $uploader,
+        ?int $sectorId = null,
+        array $sectorLevels = [],
+    ): Assessment {
+        $storedPath = null;
 
         try {
-            return DB::transaction(function () use ($scored, $file, $cycleLabel, $assessmentDate, $uploader, $storedPath): Assessment {
+            return DB::transaction(function () use ($file, $cycleLabel, $assessmentDate, $uploader, $sectorId, $sectorLevels, &$storedPath): Assessment {
+                $sector = $sectorId === null ? null : Sector::query()->lockForUpdate()->findOrFail($sectorId);
+                if ($sector !== null) {
+                    $latest = $sector->assessments()->newestFirst()->first();
+
+                    if ($latest !== null && $assessmentDate->lte($latest->assessment_date)) {
+                        throw ValidationException::withMessages([
+                            'assessment_date' => "The assessment date must be later than the latest cycle, {$latest->cycle_label} ({$latest->assessment_date->format('j M Y')}).",
+                        ]);
+                    }
+                }
+
+                $parsed = $this->parser->parse($file->getRealPath(), $sector?->disabledCoreCodes() ?? []);
+                $scored = $this->scoring->score($parsed, $sector, $sectorLevels);
+                $storedPath = $file->store('assessments', self::Disk);
+
+                if ($storedPath === false) {
+                    throw new RuntimeException('The assessment workbook could not be stored.');
+                }
                 $assessment = $this->scoring->persist($scored, [
                     'created_by' => $uploader->id,
                     'assessment_date' => $assessmentDate,
@@ -66,6 +87,7 @@ class AssessmentImportService
                     'cycle_label' => $cycleLabel,
                     'filename' => $file->getClientOriginalName(),
                     'overall_band' => $assessment->overall_band->value,
+                    'sector_id' => $sector?->id,
                 ], $uploader);
 
                 $this->deadlines->markMetByUpload($assessment, $uploader);
@@ -73,7 +95,13 @@ class AssessmentImportService
                 return $assessment;
             });
         } catch (Throwable $exception) {
-            Storage::disk(self::Disk)->delete($storedPath);
+            if ($storedPath) {
+                Storage::disk(self::Disk)->delete($storedPath);
+            }
+
+            if ($exception instanceof TemplateValidationException) {
+                $this->recordRejection($file, $exception->getMessage(), $uploader);
+            }
 
             throw $exception;
         }
